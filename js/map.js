@@ -119,7 +119,7 @@ const SubwayMap = (() => {
   }
 
   // 특정 역으로 줌인
-  function focusStation(key, zoomWidth = 480) {
+  function focusStation(key, zoomWidth = 1000) {
     const st = network.stations.get(key);
     if (!st) return;
     const a = aspect();
