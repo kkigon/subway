@@ -96,10 +96,10 @@ function startGame() {
   const ids = selectedLineIds();
   if (ids.length === 0) return;
 
-  State.network = buildNetwork(ids);
+  State.network = buildNetwork(ids, {displayLineIds: LINES.map(l => l.id)});
   SubwayMap.render(State.network);
 
-  State.pool = shuffle([...State.network.stations.keys()]);
+  State.pool = shuffle([...State.network.quizStations.keys()]);
   State.score = 0;
   State.hintsLeft = HINTS_PER_GAME;
   State.playing = true;
