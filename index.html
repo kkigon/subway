@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>지하철 게임 — 60초 역이름 맞추기</title>
+  <meta name="description" content="수도권 지하철 노선도를 보고 60초 안에 역 이름을 맞추는 게임">
+  <meta property="og:title" content="지하철 게임 🚇">
+  <meta property="og:description" content="60초 안에 지하철역 이름을 몇 개나 맞출 수 있을까?">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <link rel="stylesheet" href="css/style.css">
+  <!-- 카카오톡 공유를 쓰려면 아래 주석을 풀고 본인의 JavaScript 키를 넣으세요 (README 참고)
+  <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js" crossorigin="anonymous"></script>
+  <!-- 카카오톡 공유를 쓰려면 아래 줄의 주석을 풀고 본인의 JavaScript 키를 넣으세요 (README 참고) -->
+  <!-- <script>Kakao.init("여기에_카카오_JavaScript_키");</script> -->
+  -->
+</head>
+<body class="at-home">
+
+  <!-- 노선도 (홈 → 게임 → 엔딩까지 한 화면) -->
+  <div id="map-container" aria-hidden="true"></div>
+
+  <!-- 게임 중 상단 HUD -->
+  <header id="hud">
+    <div class="hud-left">
+      <button id="btn-hint" class="hint-btn" type="button">
+        💡 힌트 <span class="hint-pill"><span id="hint-count">3</span></span>
+      </button>
+    </div>
+    <div id="timer" class="timer">1:00</div>
+    <div class="hud-right">
+      <div class="score-box"><span class="score-label">점수</span><span id="score">0</span></div>
+    </div>
+  </header>
+
+  <!-- 정답/오답 피드백 -->
+  <div id="feedback" class="feedback" role="status"></div>
+
+  <!-- 게임 중 하단 입력 패널 -->
+  <section id="answer-panel">
+    <div class="question-row">
+      <div id="question-lines" class="question-lines"></div>
+      <span id="question-text" class="question-text">이 역의 이름은?</span>
+    </div>
+    <div id="hint-display" class="hint-display">초성 <strong id="hint-chars"></strong></div>
+    <div id="suggestions" class="suggestions"></div>
+    <div class="input-row">
+      <input id="answer-input" type="text" inputmode="text" autocomplete="off"
+             placeholder="역 이름을 입력하세요" aria-label="역 이름 입력">
+      <button id="btn-submit" type="button" class="submit-btn">제출</button>
+    </div>
+  </section>
+
+  <!-- 홈 화면 -->
+  <div id="home-screen" class="overlay">
+    <div class="overlay-card home-card">
+      <div class="title-plate">
+        <span class="title-dot"></span>
+        <h1>지하철 게임</h1>
+        <span class="title-dot"></span>
+      </div>
+      <p class="tagline">노선도를 보고 60초 안에 역 이름을 맞추세요</p>
+
+      <fieldset class="mode-select">
+        <legend class="sr-only">게임 모드 선택</legend>
+        <label class="mode-option">
+          <input type="radio" name="mode" value="core" checked>
+          <span class="mode-card">
+            <strong>1~9호선</strong>
+            <small>서울 지하철 본선만</small>
+          </span>
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="mode" value="all">
+          <span class="mode-card">
+            <strong>전체</strong>
+            <small>GTX·에버라인까지 전부</small>
+          </span>
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="mode" value="custom">
+          <span class="mode-card">
+            <strong>커스텀</strong>
+            <small>원하는 노선만 골라서</small>
+          </span>
+        </label>
+      </fieldset>
+
+      <div id="custom-lines" class="custom-lines"></div>
+
+      <button id="btn-start" class="primary-btn" type="button">게임 시작</button>
+      <p class="rule-note">힌트 3개 · 초성 공개 · 환승역은 모든 노선 표시</p>
+    </div>
+  </div>
+
+  <!-- 엔딩 화면 -->
+  <div id="end-screen" class="overlay">
+    <div class="overlay-card end-card">
+      <p class="end-label">최종 점수</p>
+      <p class="end-score"><span id="final-score">0</span><small>역</small></p>
+      <p id="final-message" class="end-message"></p>
+      <button id="btn-retry" class="primary-btn" type="button">다시하기</button>
+      <button id="btn-change-mode" class="ghost-btn" type="button">모드 변경</button>
+      <div class="share-row">
+        <button class="share-btn" data-share="native" type="button">📤 공유</button>
+        <button class="share-btn" data-share="kakao" type="button">💬 카카오톡</button>
+        <button class="share-btn" data-share="x" type="button">𝕏 포스트</button>
+        <button class="share-btn" data-share="copy" type="button">🔗 링크 복사</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/hangul.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
