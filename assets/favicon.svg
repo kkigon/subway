@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- 배경: 둥근 사각 -->
+  <rect width="64" height="64" rx="14" fill="#0052A4"/>
+  <!-- 노선 (꺾이는 지하철 라인) -->
+  <path d="M12 44 L12 30 Q12 24 18 24 L34 24 Q40 24 40 30 L40 44"
+        fill="none" stroke="#00A84D" stroke-width="6"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- 환승역 점 두 개 -->
+  <circle cx="12" cy="44" r="5.5" fill="#fff" stroke="#0052A4" stroke-width="3"/>
+  <circle cx="40" cy="44" r="5.5" fill="#fff" stroke="#0052A4" stroke-width="3"/>
+  <!-- 분기 노선 (주황) -->
+  <path d="M40 30 L52 30" fill="none" stroke="#EF7C1C" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="52" cy="30" r="5" fill="#fff" stroke="#EF7C1C" stroke-width="3"/>
+</svg>
