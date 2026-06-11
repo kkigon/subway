@@ -119,6 +119,34 @@ function buildNetwork(lineIds, options = {}) {
     [...stations.entries()].filter(([, st]) => st.activeLines.length > 0)
   );
 
+  // ---- 구간(edge)별 노선 목록 집계 ----
+  // 같은 두 역을 잇는 구간을 여러 노선이 공유하면(예: 4호선·수인분당선 안산~오이도),
+  // 한 구간에 두 노선 색을 나란히 그리기 위해 edge 단위로 모은다.
+  const edgeMap = new Map(); // "keyA||keyB" -> { ax, ay, bx, by, lines: [lineId,...] }
+  for (const line of selected) {
+    for (const seg of line.segments) {
+      for (let i = 0; i < seg.length - 1; i++) {
+        const a = seg[i], b = seg[i + 1];
+        const sa = stations.get(a), sb = stations.get(b);
+        if (!sa || !sb) continue;
+        const k = [a, b].sort().join("||");
+        if (!edgeMap.has(k)) {
+          edgeMap.set(k, {
+            ax: sa.x, ay: sa.y, bx: sb.x, by: sb.y, lines: []
+          });
+        }
+        const e = edgeMap.get(k);
+        if (!e.lines.includes(line.id)) e.lines.push(line.id);
+      }
+    }
+  }
+  // 표시 순서를 일정하게 (노선 정의 순서 따라)
+  const lineOrder = new Map(LINES.map((l, i) => [l.id, i]));
+  const edges = [...edgeMap.values()].map(e => ({
+    ...e,
+    lines: e.lines.slice().sort((x, y) => lineOrder.get(x) - lineOrder.get(y))
+  }));
+
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -135,6 +163,7 @@ function buildNetwork(lineIds, options = {}) {
     stations,
     quizStations,
     paths,
+    edges,
     bounds: { minX, minY, maxX, maxY }
   };
 }

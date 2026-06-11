@@ -46,15 +46,29 @@ function matchesAnswer(input, displayName) {
 }
 
 // 검색 점수: 정확(3) > 접두(2) > 포함(1) > 초성 접두(0.5) / 불일치(-1)
+// 괄호 별칭(예: "총신대입구(이수)"의 "이수")도 후보로 함께 평가해 최고점을 사용
 function searchScore(query, displayName) {
   const q = normalizeName(query);
   if (!q) return -1;
-  const name = normalizeName(displayName);
-  if (name === q) return 3;
-  if (name.startsWith(q)) return 2;
-  if (name.includes(q)) return 1;
-  const cho = normalizeName(toChosung(displayName));
-  const qCho = normalizeName(q);
-  if (/^[ㄱ-ㅎ]+$/.test(query.replace(/\s/g, "")) && cho.startsWith(qCho)) return 0.5;
-  return -1;
+  const isChosungQuery = /^[ㄱ-ㅎ]+$/.test(query.replace(/\s/g, ""));
+
+  // 표시명 + 괄호 별칭들을 모두 후보로
+  const candidates = [displayName];
+  const m = displayName.match(/^(.+?)\((.+?)\)$/);
+  if (m) { candidates.push(m[1], m[2]); }
+
+  let best = -1;
+  for (const cand of candidates) {
+    const name = normalizeName(cand);
+    let score = -1;
+    if (name === q) score = 3;
+    else if (name.startsWith(q)) score = 2;
+    else if (name.includes(q)) score = 1;
+    else if (isChosungQuery) {
+      const cho = normalizeName(toChosung(cand));
+      if (cho.startsWith(q)) score = 0.5;
+    }
+    if (score > best) best = score;
+  }
+  return best;
 }

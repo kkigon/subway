@@ -311,8 +311,21 @@ function scoreMessage(score) {
   return "다음 열차가 곧 도착합니다. 다시 도전!";
 }
 
+
+// 현재 게임 모드를 사람이 읽을 수 있는 문구로
+function modeLabel() {
+  if (State.mode === "core") return "1~9호선";
+  if (State.mode === "all") return "전체 노선";
+  // 커스텀: 고른 노선이 3개 이하면 이름을 직접 나열, 많으면 개수로
+  const ids = [...State.customLines];
+  const names = ids.map(id => lineById(id)?.name).filter(Boolean);
+  if (names.length === 0) return "커스텀";
+  if (names.length <= 3) return `커스텀(${names.join("·")})`;
+  return `커스텀(${names.length}개 노선)`;
+}
+
 function shareText() {
-  return `🚇 지하철 게임 — 60초 동안 ${State.score}개 역을 맞췄어요! 당신도 도전해보세요!`;
+  return `🚇 지하철 게임 - ${modeLabel()} 모드에서 60초 동안 ${State.score}개 역을 맞췄어요! 당신도 도전해보세요!`;
 }
 
 async function doShare(kind) {
@@ -396,8 +409,12 @@ document.addEventListener("DOMContentLoaded", () => {
   input.addEventListener("input", updateSuggestions);
   input.addEventListener("keydown", e => {
     if (e.isComposing) return; // 한글 조합 중에는 무시
+    const hasSuggest = State.suggestions.length > 0;
     if (e.key === "ArrowDown") { e.preventDefault(); moveSuggestion(1); }
     else if (e.key === "ArrowUp") { e.preventDefault(); moveSuggestion(-1); }
+    // 좌/우 키: 자동완성 목록이 떠 있을 때만 탐색에 사용 (아니면 커서 이동 그대로)
+    else if (e.key === "ArrowRight" && hasSuggest) { e.preventDefault(); moveSuggestion(1); }
+    else if (e.key === "ArrowLeft" && hasSuggest) { e.preventDefault(); moveSuggestion(-1); }
     else if (e.key === "Enter") {
       e.preventDefault();
       if (State.suggestIndex >= 0 && State.suggestions[State.suggestIndex]) {

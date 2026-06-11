@@ -32,14 +32,43 @@ const SubwayMap = (() => {
     gStations.innerHTML = "";
     gLabels.innerHTML = "";
 
-    // 노선 (폴리라인, 둥근 모서리)
-    for (const { line, points } of net.paths) {
-      const d = points.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" ");
-      gLines.appendChild(el("path", {
-        d, fill: "none", stroke: line.color,
-        "stroke-width": 8, "stroke-linecap": "round", "stroke-linejoin": "round",
-        class: "line-path"
-      }));
+    // 노선 그리기 — 구간(edge) 단위
+    // 한 구간을 여러 노선이 공유하면 각 노선 색을 진행방향에 수직으로
+    // 나란히(위 반/아래 반) 그려 두 색이 모두 보이게 한다.
+    const LINE_W = 8;
+    if (net.edges) {
+      for (const e of net.edges) {
+        const dx = e.bx - e.ax, dy = e.by - e.ay;
+        const len = Math.hypot(dx, dy) || 1;
+        // 진행방향에 수직인 단위벡터
+        const nx = -dy / len, ny = dx / len;
+        const n = e.lines.length;
+        // n개 선을 중앙 기준 대칭으로 배치. 공유 구간은 살짝 가늘게.
+        const w = n > 1 ? LINE_W * 0.62 : LINE_W;
+        const gap = w;                       // 인접 색 간격
+        const span = (n - 1) * gap;
+        e.lines.forEach((id, i) => {
+          const off = i * gap - span / 2;    // 중앙 정렬 오프셋
+          const ax = e.ax + nx * off, ay = e.ay + ny * off;
+          const bx = e.bx + nx * off, by = e.by + ny * off;
+          gLines.appendChild(el("path", {
+            d: `M${ax.toFixed(1)} ${ay.toFixed(1)} L${bx.toFixed(1)} ${by.toFixed(1)}`,
+            fill: "none", stroke: lineById(id).color,
+            "stroke-width": w, "stroke-linecap": "round",
+            class: "line-path"
+          }));
+        });
+      }
+    } else {
+      // 폴백: 기존 폴리라인 방식
+      for (const { line, points } of net.paths) {
+        const d = points.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" ");
+        gLines.appendChild(el("path", {
+          d, fill: "none", stroke: line.color,
+          "stroke-width": LINE_W, "stroke-linecap": "round", "stroke-linejoin": "round",
+          class: "line-path"
+        }));
+      }
     }
 
     // 역 + 이름 라벨
