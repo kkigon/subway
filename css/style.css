@@ -18,6 +18,10 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body { height: 100%; }
+/* 모바일 주소창 때문에 100vh가 잘리는 문제 → dvh 사용 */
+@supports (height: 100dvh) {
+  html, body { height: 100dvh; }
+}
 
 body {
   font-family: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo",
@@ -42,13 +46,18 @@ body {
 }
 #metro-svg { width: 100%; height: 100%; display: block; }
 
+/* 자유 이동 가능할 때: 드래그 커서 + 브라우저 기본 제스처 차단 */
+#map-container.interactive { cursor: grab; touch-action: none; }
+#map-container.grabbing { cursor: grabbing; }
+
 /* 홈/엔딩에서는 뿌옇게, 게임 중엔 선명하게 */
 .at-home #map-container,
 .at-end #map-container {
   filter: blur(7px) saturate(.75) brightness(1.04);
   transform: scale(1.03);
 }
-.in-game #map-container { filter: none; transform: none; }
+.in-game #map-container,
+.studying #map-container { filter: none; transform: none; }
 
 .line-path { transition: opacity .6s var(--ease); }
 
@@ -382,6 +391,18 @@ body {
 }
 .ghost-btn:hover { color: var(--ink); }
 
+/* 공부 모드 버튼 (홈 화면) */
+.study-btn {
+  font: inherit; font-size: 16px; font-weight: 800;
+  width: 100%; margin-top: 10px;
+  background: #fff; color: var(--line-green);
+  border: 2px solid var(--line-green); border-radius: 16px;
+  padding: 13px; cursor: pointer;
+  transition: transform .2s var(--ease), background .2s;
+}
+.study-btn:hover { transform: translateY(-2px); background: rgba(0,168,77,.07); }
+.study-btn:active { transform: translateY(0); }
+
 .rule-note { margin-top: 16px; font-size: 12.5px; color: var(--ink-soft); }
 
 /* ---------------- 엔딩 ---------------- */
@@ -412,6 +433,31 @@ body {
 }
 .share-btn:hover { background: #fff; border-color: var(--ink); transform: translateY(-1px); }
 
+/* ---------------- 공부 모드 바 ---------------- */
+.study-bar {
+  position: fixed; top: 0; left: 0; right: 0;
+  display: none; align-items: center; gap: 12px;
+  padding: max(12px, env(safe-area-inset-top)) 16px 12px;
+  background: linear-gradient(to bottom, rgba(255,255,255,.96), rgba(255,255,255,.7) 80%, rgba(255,255,255,0));
+  z-index: 35;
+}
+.studying .study-bar { display: flex; }
+.study-exit {
+  font: inherit; font-weight: 800; font-size: 15px;
+  background: var(--paper); color: var(--ink);
+  border: 2px solid var(--ink); border-radius: 999px;
+  padding: 9px 16px; cursor: pointer; box-shadow: var(--shadow);
+  flex: none;
+}
+.study-exit:hover { transform: translateY(-1px); }
+.study-title { font-weight: 800; font-size: 16px; }
+.study-tip { font-size: 12.5px; color: var(--ink-soft); margin-left: auto; }
+
+/* 공부 모드에서는 게임용 UI 전부 숨김 */
+.studying #hud,
+.studying #answer-panel,
+.studying #feedback { display: none; }
+
 /* ---------------- 토스트 ---------------- */
 .toast {
   position: fixed; bottom: 90px; left: 50%;
@@ -426,13 +472,47 @@ body {
 
 /* ---------------- 모바일 ---------------- */
 @media (max-width: 560px) {
-  .timer { font-size: 30px; padding: 3px 18px; }
-  .hint-btn { font-size: 13px; padding: 8px 12px; }
-  .score-box { padding: 6px 13px; }
-  #score { font-size: 21px; }
-  .overlay-card { padding: 28px 20px; }
+  .timer { font-size: 28px; padding: 3px 16px; border-width: 2.5px; }
+  .hint-btn { font-size: 12.5px; padding: 7px 11px; }
+  .hint-pill { min-width: 20px; height: 20px; font-size: 12px; }
+  .score-box { padding: 5px 12px; }
+  .score-label { font-size: 10px; }
+  #score { font-size: 20px; }
+  #hud { padding: max(10px, env(safe-area-inset-top)) 12px 0; }
+
+  .overlay { padding: 12px; align-items: flex-start; }
+  .overlay-card { padding: 24px 18px; border-radius: 22px; }
+  .title-plate { padding: 8px 22px; margin-bottom: 12px; }
+  .tagline { font-size: 13.5px; margin-bottom: 18px; }
+  .mode-select { gap: 7px; }
+  .mode-card { padding: 11px 6px; border-radius: 13px; }
+  .mode-card strong { font-size: 14px; }
   .mode-card small { display: none; }
-  #answer-input { font-size: 16px; }
+  .custom-lines { grid-template-columns: repeat(2, 1fr); max-height: 168px; }
+  .line-check { font-size: 12.5px; }
+  .primary-btn { font-size: 17px; padding: 14px; }
+  .study-btn { font-size: 15px; padding: 12px; }
+  #answer-input { font-size: 16px; padding: 12px 14px; } /* 16px 미만이면 iOS가 확대함 */
+  .submit-btn { font-size: 16px; padding: 0 20px; }
+  #answer-panel { padding: 12px 13px; border-radius: 20px; width: calc(100% - 16px); }
+  .question-text { font-size: 15px; }
+  .suggestions { max-height: 96px; }
+
+  .end-score { font-size: clamp(64px, 22vw, 90px); }
+  .share-row { gap: 6px; }
+  .share-btn { font-size: 12.5px; padding: 8px 12px; }
+
+  .study-tip { display: none; }
+  .study-title { font-size: 15px; }
+}
+
+/* 화면이 아주 낮을 때(가로 모바일 등) 오버레이가 스크롤되게 */
+@media (max-height: 520px) {
+  .overlay { align-items: flex-start; }
+  .overlay-card { padding: 18px; }
+  .title-plate { margin-bottom: 8px; }
+  .tagline { margin-bottom: 12px; }
+  .custom-lines { max-height: 120px; }
 }
 
 /* ---------------- 모션 최소화 ---------------- */
