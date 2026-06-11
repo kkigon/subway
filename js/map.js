@@ -8,6 +8,8 @@ const SubwayMap = (() => {
   let network = null;
   let view = { x: 0, y: 0, w: 2400, h: 1600 };
   let animFrame = null;
+  let interactive = false;   // 자유 이동(드래그/줌) 허용 여부
+  let minW = 200, maxW = 200000; // 줌 한계(뷰 너비 기준)
 
   function el(tag, attrs = {}) {
     const node = document.createElementNS(NS, tag);
@@ -24,6 +26,103 @@ const SubwayMap = (() => {
     focusRing = el("circle", { class: "focus-ring", r: 16, opacity: 0 });
     svg.append(gLines, gStations, gLabels, focusRing);
     container.appendChild(svg);
+    setupInteraction(container);
+  }
+
+  /* ---------------- 자유 이동(드래그/휠/핀치) ---------------- */
+  // 화면 픽셀 한 칸이 SVG 좌표로 몇 단위인지
+  function unitsPerPixel() {
+    const r = svg.getBoundingClientRect();
+    return r.width > 0 ? view.w / r.width : 1;
+  }
+  function clampZoom(w) {
+    return Math.max(minW, Math.min(maxW, w));
+  }
+  // 화면 좌표(clientX/Y)를 현재 view 기준 SVG 좌표로
+  function clientToSvg(cx, cy) {
+    const r = svg.getBoundingClientRect();
+    return {
+      x: view.x + (cx - r.left) / r.width * view.w,
+      y: view.y + (cy - r.top) / r.height * view.h
+    };
+  }
+  // 특정 화면 지점을 고정한 채 배율(factor)만큼 확대/축소
+  function zoomAt(cx, cy, factor) {
+    cancelAnimationFrame(animFrame);
+    const before = clientToSvg(cx, cy);
+    const newW = clampZoom(view.w * factor);
+    const newH = newW * (view.h / view.w);
+    const r = svg.getBoundingClientRect();
+    const fx = (cx - r.left) / r.width, fy = (cy - r.top) / r.height;
+    view = { x: before.x - fx * newW, y: before.y - fy * newH, w: newW, h: newH };
+    applyView();
+  }
+
+  function setupInteraction(container) {
+    const pointers = new Map(); // id -> {x,y}
+    let pinchDist = 0, pinchMid = null;
+
+    container.addEventListener("pointerdown", e => {
+      if (!interactive) return;
+      container.setPointerCapture(e.pointerId);
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+        pinchMid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      }
+      cancelAnimationFrame(animFrame);
+      container.classList.add("grabbing");
+    });
+
+    container.addEventListener("pointermove", e => {
+      if (!interactive || !pointers.has(e.pointerId)) return;
+      const prev = pointers.get(e.pointerId);
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (pointers.size === 1) {
+        // 드래그 패닝
+        const upp = unitsPerPixel();
+        view.x -= (e.clientX - prev.x) * upp;
+        view.y -= (e.clientY - prev.y) * upp;
+        applyView();
+      } else if (pointers.size === 2) {
+        // 핀치 줌
+        const [a, b] = [...pointers.values()];
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        if (pinchDist > 0) zoomAt(mid.x, mid.y, pinchDist / dist);
+        // 두 손가락 중심 이동으로 패닝
+        if (pinchMid) {
+          const upp = unitsPerPixel();
+          view.x -= (mid.x - pinchMid.x) * upp;
+          view.y -= (mid.y - pinchMid.y) * upp;
+          applyView();
+        }
+        pinchDist = dist; pinchMid = mid;
+      }
+    });
+
+    const endPointer = e => {
+      pointers.delete(e.pointerId);
+      if (pointers.size < 2) { pinchDist = 0; pinchMid = null; }
+      if (pointers.size === 0) container.classList.remove("grabbing");
+    };
+    container.addEventListener("pointerup", endPointer);
+    container.addEventListener("pointercancel", endPointer);
+
+    // 휠 줌 (트랙패드 핀치도 wheel+ctrlKey로 들어옴)
+    container.addEventListener("wheel", e => {
+      if (!interactive) return;
+      e.preventDefault();
+      const factor = Math.exp(e.deltaY * 0.0015); // 위로 굴리면 축소값<1 → 확대
+      zoomAt(e.clientX, e.clientY, factor);
+    }, { passive: false });
+  }
+
+  function setInteractive(on) {
+    interactive = on;
+    if (svg) svg.parentElement.classList.toggle("interactive", on);
   }
 
   function render(net) {
@@ -140,11 +239,23 @@ const SubwayMap = (() => {
   function fitAll(instant = false) {
     const b = network.bounds;
     const pad = 80;
-    let w = (b.maxX - b.minX) + pad * 2;
-    let h = (b.maxY - b.minY) + pad * 2;
-    const a = aspect();
-    if (w / h < a) w = h * a; else h = w / a;
+    const mapW = (b.maxX - b.minX) + pad * 2;
+    const mapH = (b.maxY - b.minY) + pad * 2;
+    const a = aspect();              // 컨테이너 가로/세로 비
+    const mapAspect = mapW / mapH;
+    let w, h;
+    if (a >= mapAspect) {
+      // 화면이 지도보다 옆으로 넓음(데스크탑 등): 지도 전체가 보이게 세로 기준 맞춤
+      h = mapH; w = h * a;
+    } else {
+      // 화면이 세로로 김(모바일 세로): 지도 '세로'를 화면에 꽉 채워 크게 보이게.
+      // 가로는 화면보다 넓어져서 잘리지만, 드래그로 좌우를 탐색할 수 있다.
+      h = mapH; w = h * a;           // w < mapW → 좌우 일부만 보이고 패닝 가능
+    }
     const cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2;
+    // 줌 한계: 전체(가로 기준)보다 더 멀리까지 축소 허용, 한 역 수준까지 확대
+    maxW = Math.max(mapW, w) * 1.5;
+    minW = Math.max(120, mapW / 22);
     const target = { x: cx - w / 2, y: cy - h / 2, w, h };
     instant ? jumpTo(target) : animateTo(target, 900);
   }
@@ -208,9 +319,28 @@ const SubwayMap = (() => {
     focusRing.classList.remove("pulse");
   }
 
-  function handleResize() {
-    if (network) applyView();
+  // 공부 모드: 모든 역 이름 표시 / 숨김
+  function showAllLabels() {
+    gLabels.querySelectorAll("text").forEach(t => t.classList.add("revealed"));
+  }
+  function hideAllLabels() {
+    gLabels.querySelectorAll("text").forEach(t => t.classList.remove("revealed"));
   }
 
-  return { init, render, fitAll, focusStation, revealLabel, hideFocus, handleResize };
+  function handleResize() {
+    if (!network) return;
+    // 컨테이너 비율이 바뀌면 뷰 높이를 비율에 맞춰 보정(중심 유지)
+    const a = aspect();
+    const cx = view.x + view.w / 2, cy = view.y + view.h / 2;
+    const newH = view.w / a;
+    view.h = newH;
+    view.x = cx - view.w / 2;
+    view.y = cy - newH / 2;
+    applyView();
+  }
+
+  return {
+    init, render, fitAll, focusStation, revealLabel, hideFocus, handleResize,
+    setInteractive, showAllLabels, hideAllLabels
+  };
 })();

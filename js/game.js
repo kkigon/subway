@@ -12,6 +12,7 @@ const State = {
   mode: "core",          // core | all | custom
   customLines: new Set(),
   playing: false,
+  studying: false,       // 공부 모드 여부
   network: null,
   pool: [],              // 출제 대기 역 키
   current: null,         // 현재 문제 역 키
@@ -111,13 +112,14 @@ function startGame() {
   $("#hint-display").classList.remove("show");
 
   document.body.classList.add("in-game");
-  document.body.classList.remove("at-home", "at-end");
+  document.body.classList.remove("at-home", "at-end", "studying");
 
   // 노선도가 선명해진 뒤 첫 문제로 줌인
   setTimeout(() => {
     nextQuestion();
     State.endAt = performance.now() + GAME_SECONDS * 1000;
     tickTimer();
+    SubwayMap.setInteractive(true); // 게임 중에도 드래그/줌으로 둘러보기 가능
     $("#answer-input").focus();
   }, 700);
 }
@@ -293,6 +295,7 @@ function clearSuggestions() {
 function endGame() {
   State.playing = false;
   cancelAnimationFrame(State.timerFrame);
+  SubwayMap.setInteractive(false);
   SubwayMap.hideFocus();
   SubwayMap.fitAll();
 
@@ -311,7 +314,6 @@ function scoreMessage(score) {
   return "다음 열차가 곧 도착합니다. 다시 도전!";
 }
 
-
 // 현재 게임 모드를 사람이 읽을 수 있는 문구로
 function modeLabel() {
   if (State.mode === "core") return "1~9호선";
@@ -325,7 +327,7 @@ function modeLabel() {
 }
 
 function shareText() {
-  return `🚇 지하철 게임 - ${modeLabel()} 모드에서 60초 동안 ${State.score}개 역을 맞췄어요! 당신도 도전해보세요!`;
+  return `🚇 지하철 게임 — ${modeLabel()} 모드에서 60초 동안 ${State.score}개 역을 맞췄어요! 당신도 도전해보세요!`;
 }
 
 async function doShare(kind) {
@@ -372,13 +374,42 @@ function toast(msg) {
 /* ---------------- 초기화 & 이벤트 ---------------- */
 function goHome() {
   State.playing = false;
+  State.studying = false;
   cancelAnimationFrame(State.timerFrame);
-  document.body.classList.remove("in-game", "at-end");
+  document.body.classList.remove("in-game", "at-end", "studying");
   document.body.classList.add("at-home");
+  SubwayMap.setInteractive(false);
   SubwayMap.hideFocus();
   // 홈 배경용 전체 노선도
   State.network = buildNetwork(LINES.map(l => l.id));
   SubwayMap.render(State.network);
+}
+
+/* ---------------- 공부 모드 ---------------- */
+function startStudy() {
+  State.playing = false;
+  State.studying = true;
+  cancelAnimationFrame(State.timerFrame);
+
+  // 전체 노선 + 모든 역을 표시
+  State.network = buildNetwork(LINES.map(l => l.id), { displayLineIds: LINES.map(l => l.id) });
+  SubwayMap.render(State.network);
+
+  document.body.classList.remove("at-home", "at-end", "in-game");
+  document.body.classList.add("studying");
+
+  SubwayMap.hideFocus();
+  // 선명해진 뒤 라벨 표시 + 자유 이동 켜기
+  setTimeout(() => {
+    SubwayMap.showAllLabels();
+    SubwayMap.setInteractive(true);
+  }, 650);
+}
+
+function exitStudy() {
+  SubwayMap.setInteractive(false);
+  SubwayMap.hideAllLabels();
+  goHome();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -401,6 +432,8 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#btn-change-mode").addEventListener("click", goHome);
   $("#btn-hint").addEventListener("click", useHint);
   $("#btn-submit").addEventListener("click", submitAnswer);
+  $("#btn-study").addEventListener("click", startStudy);
+  $("#btn-exit-study").addEventListener("click", exitStudy);
 
   document.querySelectorAll("[data-share]").forEach(btn =>
     btn.addEventListener("click", () => doShare(btn.dataset.share)));
@@ -427,5 +460,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  window.addEventListener("resize", () => SubwayMap.handleResize());
+  window.addEventListener("resize", () => {
+    // 홈/엔딩 화면은 전체보기를 다시 맞추고, 게임/공부 중엔 현재 시점 유지
+    if (document.body.classList.contains("at-home") ||
+        document.body.classList.contains("at-end")) {
+      SubwayMap.fitAll(true);
+    } else {
+      SubwayMap.handleResize();
+    }
+  });
+
+  // 초기 레이아웃이 늦게 잡히는 모바일 대비: 한 번 더 맞춤
+  requestAnimationFrame(() => SubwayMap.fitAll(true));
 });
