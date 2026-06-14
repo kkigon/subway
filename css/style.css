@@ -348,6 +348,8 @@ body {
   display: grid; grid-template-columns: repeat(3, 1fr);
   gap: 10px; margin-bottom: 14px;
 }
+/* 부산: 모드가 전체/커스텀 2개뿐 → 2칸으로 절반씩 채움 */
+.mode-select.two-cols { grid-template-columns: repeat(2, 1fr); }
 .mode-option input { position: absolute; opacity: 0; }
 .mode-card {
   display: flex; flex-direction: column; gap: 3px;
@@ -734,4 +736,35 @@ body.modal-open { overflow: hidden; }
   .theme-grid { grid-template-columns: repeat(3, 1fr); }
   .nick-tag { font-size: 13px; }
   .account-area { right: 12px; }
+}
+
+/* ============================================================
+   지역 선택 (수도권 / 부산) — 홈 화면 & 랭킹 모달
+   ============================================================ */
+.region-select {
+  display: flex; gap: 8px; margin-bottom: 12px;
+}
+.region-btn {
+  flex: 1; font: inherit; font-size: 15px; font-weight: 800;
+  background: #f3f4f7; color: var(--ink-soft);
+  border: 2px solid transparent; border-radius: 14px;
+  padding: 11px; cursor: pointer;
+  transition: background .2s, color .2s, border-color .2s, transform .15s var(--ease);
+}
+.region-btn:hover { transform: translateY(-1px); }
+.region-btn.active {
+  background: #fff; color: var(--line-blue);
+  border-color: var(--line-blue);
+}
+
+/* 랭킹 모달 지역 탭 */
+.rank-region-tabs { display: flex; gap: 8px; margin-bottom: 8px; }
+.rank-region-tab {
+  flex: 1; font: inherit; font-size: 14px; font-weight: 800;
+  background: transparent; color: var(--ink-soft);
+  border: 2px solid #e7e9ee; border-radius: 999px;
+  padding: 8px; cursor: pointer; transition: all .2s;
+}
+.rank-region-tab.active {
+  background: var(--ink); color: #fff; border-color: var(--ink);
 }
