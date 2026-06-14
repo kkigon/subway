@@ -23,6 +23,9 @@
   <!-- 노선도 (홈 → 게임 → 엔딩까지 한 화면) -->
   <div id="map-container" aria-hidden="true"></div>
 
+  <!-- 우측 상단 계정 영역 (로그인 버튼 / 닉네임 태그) -->
+  <div id="account-area" class="account-area"></div>
+
   <!-- 게임 중 상단 HUD -->
   <header id="hud">
     <div class="hud-left">
@@ -31,6 +34,7 @@
       </button>
     </div>
     <div id="timer" class="timer">1:00</div>
+    <div id="endless-badge" class="endless-badge">🔥 연속</div>
     <div class="hud-right">
       <div class="score-box"><span class="score-label">점수</span><span id="score">0</span></div>
     </div>
@@ -91,8 +95,29 @@
 
       <div id="custom-lines" class="custom-lines"></div>
 
+      <fieldset class="play-mode-select">
+        <legend class="sr-only">플레이 모드 선택</legend>
+        <label class="play-mode-option">
+          <input type="radio" name="playmode" value="timed" checked>
+          <span class="play-mode-card">
+            <strong>⏱️ 1분 도전</strong>
+            <small>60초 동안 많이 맞히기</small>
+          </span>
+        </label>
+        <label class="play-mode-option">
+          <input type="radio" name="playmode" value="endless">
+          <span class="play-mode-card">
+            <strong>🔥 연속 모드</strong>
+            <small>틀리면 끝! 최대 연속 기록</small>
+          </span>
+        </label>
+      </fieldset>
+
       <button id="btn-start" class="primary-btn" type="button">게임 시작</button>
-      <button id="btn-study" class="study-btn" type="button">📖 공부 모드</button>
+      <div class="home-sub-btns">
+        <button id="btn-study" class="study-btn" type="button">📖 공부 모드</button>
+        <button id="btn-ranking" class="rank-open-btn" type="button">🏆 랭킹</button>
+      </div>
       <p class="rule-note">힌트는 3개가 주어지고, 힌트를 쓰면 초성이 보여요!</p>
     </div>
   </div>
@@ -100,11 +125,14 @@
   <!-- 엔딩 화면 -->
   <div id="end-screen" class="overlay">
     <div class="overlay-card end-card">
-      <p class="end-label">최종 점수</p>
-      <p class="end-score"><span id="final-score">0</span><small>역</small></p>
+      <p id="end-label" class="end-label">최종 점수</p>
+      <p class="end-score"><span id="final-score">0</span><small id="final-score-unit">역</small></p>
       <p id="final-message" class="end-message"></p>
       <button id="btn-retry" class="primary-btn" type="button">다시하기</button>
-      <button id="btn-change-mode" class="ghost-btn" type="button">모드 변경</button>
+      <div class="home-sub-btns">
+        <button id="btn-change-mode" class="ghost-btn" type="button">모드 변경</button>
+        <button id="btn-ranking-end" class="rank-open-btn" type="button">🏆 랭킹</button>
+      </div>
       <div class="share-row">
         <button class="share-btn" data-share="native" type="button">📤 공유</button>
         <button class="share-btn" data-share="kakao" type="button">💬 카카오톡</button>
@@ -121,6 +149,71 @@
     <span class="study-tip">드래그로 이동 · 휠/핀치로 확대</span>
   </div>
 
+  <!-- ============ 모달들 ============ -->
+
+  <!-- 첫 로그인: 프로필 설정 -->
+  <div id="profile-modal" class="modal-backdrop">
+    <div class="modal-card">
+      <h2 class="modal-title">프로필을 만들어요</h2>
+      <label class="field-label" for="profile-nick">닉네임 (1~12자)</label>
+      <input id="profile-nick" class="field-input" type="text" maxlength="12" placeholder="예: 1호선의전설" autocomplete="off">
+      <label class="field-label">테마 노선 (나를 대표하는 노선)</label>
+      <div id="profile-theme-grid" class="theme-grid"></div>
+      <p id="profile-error" class="field-msg no"></p>
+      <div class="modal-actions">
+        <button id="profile-cancel" class="ghost-btn" type="button">로그아웃</button>
+        <button id="profile-save" class="primary-btn slim" type="button">시작하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 랭킹 -->
+  <div id="ranking-modal" class="modal-backdrop">
+    <div class="modal-card">
+      <button class="modal-x" type="button" data-close-modal="ranking-modal" aria-label="닫기">✕</button>
+      <h2 class="modal-title">🏆 주간 랭킹</h2>
+      <p id="ranking-reset" class="rank-reset"></p>
+      <div class="rank-tabs">
+        <button class="rank-tab active" type="button" data-mode="core">1~9호선</button>
+        <button class="rank-tab" type="button" data-mode="all">전체 노선</button>
+      </div>
+      <p class="rank-note">⏱️ 1분 도전 모드 기록만 집계돼요</p>
+      <div id="ranking-body" class="rank-body"></div>
+    </div>
+  </div>
+
+  <!-- 마이페이지 -->
+  <div id="mypage-modal" class="modal-backdrop">
+    <div class="modal-card">
+      <button class="modal-x" type="button" data-close-modal="mypage-modal" aria-label="닫기">✕</button>
+      <h2 class="modal-title">마이페이지</h2>
+      <div class="mypage-head">
+        <span id="mypage-nicktag"></span>
+        <span id="mypage-email" class="mypage-email"></span>
+      </div>
+
+      <label class="field-label">닉네임 변경</label>
+      <div class="inline-field">
+        <input id="mypage-nick" class="field-input" type="text" maxlength="12" autocomplete="off">
+        <button id="mypage-nick-save" class="primary-btn slim" type="button">변경</button>
+      </div>
+      <p id="mypage-nick-msg" class="field-msg"></p>
+
+      <label class="field-label">테마 노선</label>
+      <div id="mypage-theme-grid" class="theme-grid"></div>
+
+      <label class="field-label">내 최고 기록</label>
+      <div id="mypage-best" class="best-row"></div>
+
+      <label class="field-label">플레이 기록 (시간제한 모드)</label>
+      <div id="mypage-plays" class="plays-list"></div>
+
+      <div class="modal-actions">
+        <button id="mypage-logout" class="ghost-btn" type="button">로그아웃</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast" class="toast" role="status"></div>
 
   <script src="js/data.js"></script>
@@ -128,5 +221,11 @@
   <script src="js/layout.js"></script>
   <script src="js/map.js"></script>
   <script src="js/game.js"></script>
+
+  <!-- 백엔드(로그인/랭킹) — Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/backend.js"></script>
+  <script src="js/account-ui.js"></script>
 </body>
 </html>
