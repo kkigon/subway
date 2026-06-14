@@ -5,11 +5,13 @@
 const GAME_SECONDS = 60;
 const HINTS_PER_GAME = 3;
 const REVEAL_DELAY = 950; // 정답 공개 후 다음 문제로 넘어가는 시간(ms)
+const SUGGEST_LIMIT = 50; // 자동완성에 한 번에 보여줄 최대 추천 개수 (이 이상은 스크롤)
 
 const $ = sel => document.querySelector(sel);
 
 const State = {
-  mode: "core",          // core | all | custom
+  mode: "core",          // core | all | custom (노선 범위)
+  playMode: "timed",     // timed(1분 도전) | endless(연속 모드)
   customLines: new Set(),
   playing: false,
   studying: false,       // 공부 모드 여부
@@ -113,12 +115,19 @@ function startGame() {
 
   document.body.classList.add("in-game");
   document.body.classList.remove("at-home", "at-end", "studying");
+  // 연속 모드면 타이머 숨김
+  document.body.classList.toggle("endless-mode", State.playMode === "endless");
 
   // 노선도가 선명해진 뒤 첫 문제로 줌인
   setTimeout(() => {
     nextQuestion();
-    State.endAt = performance.now() + GAME_SECONDS * 1000;
-    tickTimer();
+    if (State.playMode === "timed") {
+      State.endAt = performance.now() + GAME_SECONDS * 1000;
+      tickTimer();
+    } else {
+      // 연속 모드: 시간 제한 없음
+      State.endAt = Infinity;
+    }
     SubwayMap.setInteractive(true); // 게임 중에도 드래그/줌으로 둘러보기 가능
     $("#answer-input").focus();
   }, 700);
@@ -208,6 +217,12 @@ function submitAnswer() {
     popFeedback(`❌ 정답은 「${st.name}」`, "no");
   }
 
+  // 연속 모드: 틀리면 게임 오버
+  if (State.playMode === "endless" && !correct) {
+    setTimeout(() => endGame(), REVEAL_DELAY);
+    return;
+  }
+
   const remain = State.endAt - performance.now();
   setTimeout(() => {
     if (remain <= 0) { endGame(); return; }
@@ -248,7 +263,7 @@ function updateSuggestions() {
     if (score > 0) results.push({ st, score });
   }
   results.sort((a, b) => b.score - a.score || a.st.name.length - b.st.name.length || a.st.name.localeCompare(b.st.name, "ko"));
-  State.suggestions = results.slice(0, 8).map(r => r.st);
+  State.suggestions = results.slice(0, SUGGEST_LIMIT).map(r => r.st);
   State.suggestIndex = -1;
 
   box.innerHTML = "";
@@ -279,8 +294,11 @@ function pickSuggestion(st) {
 function moveSuggestion(dir) {
   if (State.suggestions.length === 0) return;
   State.suggestIndex = (State.suggestIndex + dir + State.suggestions.length) % State.suggestions.length;
-  document.querySelectorAll(".suggest-item").forEach((el, i) =>
-    el.classList.toggle("active", i === State.suggestIndex));
+  const items = document.querySelectorAll(".suggest-item");
+  items.forEach((el, i) => el.classList.toggle("active", i === State.suggestIndex));
+  // 목록이 길어 스크롤될 때, 선택 항목이 보이도록 따라 스크롤
+  const active = items[State.suggestIndex];
+  if (active) active.scrollIntoView({ block: "nearest" });
 }
 
 function clearSuggestions() {
@@ -301,16 +319,42 @@ function endGame() {
 
   $("#final-score").textContent = State.score;
   $("#final-message").textContent = scoreMessage(State.score);
+  // 엔딩 화면 라벨/단위를 모드에 맞게
+  if (State.playMode === "endless") {
+    $("#end-label").textContent = "🔥 연속 정답";
+    $("#final-score-unit").textContent = "연속";
+  } else {
+    $("#end-label").textContent = "최종 점수";
+    $("#final-score-unit").textContent = "역";
+  }
 
   document.body.classList.remove("in-game");
   document.body.classList.add("at-end");
+
+  // 백엔드에 기록 저장 (시간제한 모드 + 로그인 상태일 때만; 훅이 내부에서 판단)
+  if (typeof window.onPlayFinished === "function") {
+    window.onPlayFinished({
+      score: State.score,
+      mode: State.mode,         // 'core' | 'all' | 'custom'
+      modeLabel: modeLabel(),   // 사람이 읽는 라벨
+      playMode: State.playMode, // 'timed' | 'endless'
+    });
+  }
 }
 
 function scoreMessage(score) {
-  if (score >= 25) return "당신은 걸어다니는 노선도!";
-  if (score >= 18) return "역무원도 깜짝 놀랄 실력!";
-  if (score >= 12) return "수도권 지리 좀 아는데요?";
-  if (score >= 6) return "꽤 다니셨군요. 한 판 더?";
+  if (State.playMode === "endless") {
+    if (score >= 30) return "도저히 인간으로는 보이지 않군요!";
+    if (score >= 20) return "끊김 없는 레전드 질주!";
+    if (score >= 12) return "엄청난 집중력이네요!";
+    if (score >= 6) return "안정적인 출발, 한 판 더?";
+    if (score >= 1) return "다음엔 더 멀리 갈 수 있어요!";
+    return "괜찮아요, 첫 역부터 다시!";
+  }
+  if (score >= 25) return "이게 말이 되는 실력인가요???";
+  if (score >= 18) return "당신은 걸어다니는 노선도!";
+  if (score >= 12) return "철도공사 직원도 깜짝 놀랄 실력!";
+  if (score >= 6) return "수도권 지리 좀 아는데요? 한 판 더?";
   return "다음 열차가 곧 도착합니다. 다시 도전!";
 }
 
@@ -327,7 +371,10 @@ function modeLabel() {
 }
 
 function shareText() {
-  return `🚇 지하철 게임 — ${modeLabel()} 모드에서 60초 동안 ${State.score}개 역을 맞췄어요! 당신도 도전해보세요!`;
+  if (State.playMode === "endless") {
+    return `🚇 지하철 게임 — ${modeLabel()} · 연속 모드에서 ${State.score}개 역을 맞췄어요! 당신도 도전해보세요!`;
+  }
+  return `🚇 지하철 게임 — 60초 동안 ${State.score}개 역을 맞췄어요! 당신도 도전해보세요!`;
 }
 
 async function doShare(kind) {
@@ -376,7 +423,7 @@ function goHome() {
   State.playing = false;
   State.studying = false;
   cancelAnimationFrame(State.timerFrame);
-  document.body.classList.remove("in-game", "at-end", "studying");
+  document.body.classList.remove("in-game", "at-end", "studying", "endless-mode");
   document.body.classList.add("at-home");
   SubwayMap.setInteractive(false);
   SubwayMap.hideFocus();
@@ -417,13 +464,17 @@ document.addEventListener("DOMContentLoaded", () => {
   buildCustomPicker();
   goHome();
 
-  // 모드 선택
+  // 노선 범위 선택
   document.querySelectorAll('input[name="mode"]').forEach(radio => {
     radio.addEventListener("change", () => {
       State.mode = radio.value;
       $("#custom-lines").classList.toggle("show", State.mode === "custom");
       updateStartButton();
     });
+  });
+  // 플레이 모드 선택 (1분 도전 / 연속 모드)
+  document.querySelectorAll('input[name="playmode"]').forEach(radio => {
+    radio.addEventListener("change", () => { State.playMode = radio.value; });
   });
   updateStartButton();
 
