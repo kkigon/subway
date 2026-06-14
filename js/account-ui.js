@@ -138,13 +138,16 @@
       if (res.ok) { $("#mypage-nicktag").innerHTML = nickTagHTML(nick.value.trim(), chosen); renderAccountButton(); }
     };
 
-    // 최고점 요약
+    // 최고점 요약 (지역+모드별)
     const best = await Account.myBest();
-    const label = { core: "1~9호선", all: "전체", custom: "커스텀" };
-    const order = ["core", "all", "custom"];
-    $("#mypage-best").innerHTML = order
+    const bestLabel = {
+      "seoul:core": "수도권 1~9호선", "seoul:all": "수도권 전체", "seoul:custom": "수도권 커스텀",
+      "busan:all": "부산 전체", "busan:custom": "부산 커스텀",
+    };
+    const bestOrder = ["seoul:core", "seoul:all", "seoul:custom", "busan:all", "busan:custom"];
+    $("#mypage-best").innerHTML = bestOrder
       .filter(k => best[k] !== undefined)
-      .map(k => `<div class="best-card"><span class="best-mode">${label[k]}</span><span class="best-score">${best[k]}</span><span class="best-unit">역</span></div>`)
+      .map(k => `<div class="best-card"><span class="best-mode">${bestLabel[k] || k}</span><span class="best-score">${best[k]}</span><span class="best-unit">역</span></div>`)
       .join("") || `<p class="muted">아직 기록이 없어요. 1분 도전 모드를 플레이해보세요!</p>`;
 
     // 플레이 기록 목록
@@ -168,10 +171,29 @@
   }
 
   /* ---------- 랭킹 모달 ---------- */
-  let rankTab = "core";
+  let rankRegion = "seoul";  // 랭킹에서 보고 있는 지역
+  let rankTab = "core";      // 랭킹에서 보고 있는 노선 범위(core/all)
+
   async function openRanking() {
     openModal("#ranking-modal");
     $("#ranking-reset").textContent = "⏳ " + Account.nextResetText();
+    // 게임에서 현재 선택한 지역으로 시작 (없으면 수도권)
+    const cur = (typeof State !== "undefined" && State.region) ? State.region : "seoul";
+    setRankRegion(cur);
+  }
+
+  function setRankRegion(region) {
+    rankRegion = region;
+    document.querySelectorAll(".rank-region-tab").forEach(t =>
+      t.classList.toggle("active", t.dataset.region === region));
+
+    // 부산은 'all' 한 가지만, 수도권은 core/all 둘 다
+    const isBusan = region === "busan";
+    const coreTab = document.querySelector('.rank-tab[data-mode="core"]');
+    if (coreTab) coreTab.style.display = isBusan ? "none" : "";
+    // 부산이면 강제로 all 탭
+    if (isBusan) rankTab = "all";
+    else if (rankTab !== "core" && rankTab !== "all") rankTab = "core";
     setRankTab(rankTab);
   }
 
@@ -179,17 +201,19 @@
     rankTab = mode;
     document.querySelectorAll(".rank-tab").forEach(t =>
       t.classList.toggle("active", t.dataset.mode === mode));
-    loadRanking(mode);
+    loadRanking();
   }
 
-  async function loadRanking(mode) {
+  async function loadRanking() {
     const body = $("#ranking-body");
     body.innerHTML = `<p class="muted">불러오는 중…</p>`;
     if (!Account.isConfigured()) {
       body.innerHTML = `<p class="muted">랭킹을 쓰려면 먼저 Supabase 설정이 필요해요.</p>`;
       return;
     }
-    const rows = await Account.weeklyRanking(mode, 50);
+    // DB에는 region별 mode를 합쳐 "seoul:core" 같은 키로 저장한다.
+    const rankKey = `${rankRegion}:${rankTab}`;
+    const rows = await Account.weeklyRanking(rankKey, 50);
     const myId = Account.getProfile()?.id;
     if (rows.length === 0) {
       body.innerHTML = `<p class="muted">이번 주 기록이 아직 없어요. 첫 주자가 되어보세요!</p>`;
@@ -212,10 +236,12 @@
 
   /* ---------- game.js가 호출하는 훅 ---------- */
   // 시간제한 모드 한 판이 끝나면 game.js가 이걸 부른다.
-  window.onPlayFinished = async ({ score, mode, modeLabel, playMode }) => {
+  window.onPlayFinished = async ({ score, region, mode, modeLabel, playMode }) => {
     if (playMode !== "timed") return;          // 연속 모드는 저장 안 함
     if (!Account.isLoggedIn() || !Account.hasProfile()) return; // 비로그인은 저장 안 함
-    await Account.savePlay({ score, mode, modeLabel });
+    // 랭킹/기록 구분을 위해 region을 함께 저장. rankMode = "지역:모드"
+    const rankMode = `${region || "seoul"}:${mode}`;
+    await Account.savePlay({ score, region: region || "seoul", mode, rankMode, modeLabel });
   };
 
   /* ---------- 초기화 ---------- */
@@ -226,6 +252,8 @@
 
     document.querySelectorAll(".rank-tab").forEach(t =>
       t.addEventListener("click", () => setRankTab(t.dataset.mode)));
+    document.querySelectorAll(".rank-region-tab").forEach(t =>
+      t.addEventListener("click", () => setRankRegion(t.dataset.region)));
 
     // 모달 닫기 버튼 / 배경 클릭
     document.querySelectorAll("[data-close-modal]").forEach(btn =>

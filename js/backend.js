@@ -140,11 +140,15 @@ const Account = (() => {
   }
 
   // 시간제한 모드 플레이 기록 저장 (연속 모드는 호출하지 않음)
-  async function savePlay({ score, mode, modeLabel }) {
+  async function savePlay({ score, region, mode, rankMode, modeLabel }) {
     if (!client || !session) return false;
     const { error } = await client.from("plays").insert({
       user_id: session.user.id,
-      score, mode, mode_label: modeLabel,
+      score,
+      region: region || "seoul",
+      mode,
+      rank_mode: rankMode || `${region || "seoul"}:${mode}`,
+      mode_label: modeLabel,
     });
     if (error) { console.warn("[Account] 기록 저장 실패", error.message); return false; }
     return true;
@@ -155,7 +159,7 @@ const Account = (() => {
     if (!client || !session) return [];
     const { data, error } = await client
       .from("plays")
-      .select("score, mode, mode_label, created_at")
+      .select("score, region, mode, mode_label, created_at")
       .eq("user_id", session.user.id)
       .order("created_at", { ascending: false })
       .limit(limit);
@@ -163,14 +167,15 @@ const Account = (() => {
     return data || [];
   }
 
-  // 내 최고점 (모드별) — 마이페이지 요약용
+  // 내 최고점 (지역+모드별) — 마이페이지 요약용
   async function myBest() {
     const plays = await myPlays(500);
     const best = {};
     for (const p of plays) {
-      if (best[p.mode] === undefined || p.score > best[p.mode]) best[p.mode] = p.score;
+      const key = `${p.region || "seoul"}:${p.mode}`;
+      if (best[key] === undefined || p.score > best[key]) best[key] = p.score;
     }
-    return best; // { core: 23, all: 12, custom: 40 } 형태
+    return best; // { "seoul:core": 23, "busan:all": 12, ... } 형태
   }
 
   // 주간 랭킹 (mode: 'core' | 'all')

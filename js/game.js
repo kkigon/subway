@@ -10,6 +10,7 @@ const SUGGEST_LIMIT = 50; // 자동완성에 한 번에 보여줄 최대 추천 
 const $ = sel => document.querySelector(sel);
 
 const State = {
+  region: "seoul",       // seoul(수도권) | busan(부산)
   mode: "core",          // core | all | custom (노선 범위)
   playMode: "timed",     // timed(1분 도전) | endless(연속 모드)
   customLines: new Set(),
@@ -60,17 +61,29 @@ const Sound = (() => {
   return { play };
 })();
 
-/* ---------------- 모드 ---------------- */
+/* ---------------- 모드 / 지역 ---------------- */
+// 현재 지역에 속한 노선 목록
+function regionLines() {
+  return LINES.filter(l => (l.region || "seoul") === State.region);
+}
+function regionLineIds() {
+  return regionLines().map(l => l.id);
+}
+
 function selectedLineIds() {
-  if (State.mode === "core") return LINES.filter(l => l.core).map(l => l.id);
-  if (State.mode === "all") return LINES.map(l => l.id);
+  // 부산은 core(1~9호선) 모드가 없으므로 all과 동일 처리
+  if (State.mode === "core") {
+    const core = regionLines().filter(l => l.core).map(l => l.id);
+    return core.length ? core : regionLineIds();
+  }
+  if (State.mode === "all") return regionLineIds();
   return [...State.customLines];
 }
 
 function buildCustomPicker() {
   const box = $("#custom-lines");
   box.innerHTML = "";
-  for (const line of LINES) {
+  for (const line of regionLines()) {
     const label = document.createElement("label");
     label.className = "line-check";
     label.innerHTML = `
@@ -99,7 +112,7 @@ function startGame() {
   const ids = selectedLineIds();
   if (ids.length === 0) return;
 
-  State.network = buildNetwork(ids, {displayLineIds: LINES.map(l => l.id)});
+  State.network = buildNetwork(ids, {displayLineIds: regionLineIds()});
   SubwayMap.render(State.network);
 
   State.pool = shuffle([...State.network.quizStations.keys()]);
@@ -335,6 +348,7 @@ function endGame() {
   if (typeof window.onPlayFinished === "function") {
     window.onPlayFinished({
       score: State.score,
+      region: State.region,     // 'seoul' | 'busan'
       mode: State.mode,         // 'core' | 'all' | 'custom'
       modeLabel: modeLabel(),   // 사람이 읽는 라벨
       playMode: State.playMode, // 'timed' | 'endless'
@@ -358,23 +372,29 @@ function scoreMessage(score) {
   return "다음 열차가 곧 도착합니다. 다시 도전!";
 }
 
-// 현재 게임 모드를 사람이 읽을 수 있는 문구로
+// 지역 이름
+function regionLabel() {
+  return State.region === "busan" ? "부산" : "수도권";
+}
+
+// 현재 게임 모드를 사람이 읽을 수 있는 문구로 (지역 포함)
 function modeLabel() {
-  if (State.mode === "core") return "1~9호선";
-  if (State.mode === "all") return "전체 노선";
+  const rg = regionLabel();
+  if (State.mode === "core") return `${rg} 1~9호선`;
+  if (State.mode === "all") return `${rg} 전체 노선`;
   // 커스텀: 고른 노선이 3개 이하면 이름을 직접 나열, 많으면 개수로
   const ids = [...State.customLines];
   const names = ids.map(id => lineById(id)?.name).filter(Boolean);
-  if (names.length === 0) return "커스텀";
-  if (names.length <= 3) return `커스텀(${names.join("·")})`;
-  return `커스텀(${names.length}개 노선)`;
+  if (names.length === 0) return `${rg} 커스텀`;
+  if (names.length <= 3) return `${rg} 커스텀(${names.join("·")})`;
+  return `${rg} 커스텀(${names.length}개 노선)`;
 }
 
 function shareText() {
   if (State.playMode === "endless") {
     return `🚇 지하철 게임 — ${modeLabel()} · 연속 모드에서 ${State.score}개 역을 맞췄어요! 당신도 도전해보세요!`;
   }
-  return `🚇 지하철 게임 — 60초 동안 ${State.score}개 역을 맞췄어요! 당신도 도전해보세요!`;
+  return `🚇 지하철 게임 — ${modeLabel()}에서 60초 동안 ${State.score}개 역을 맞췄어요! 당신도 도전해보세요!`;
 }
 
 async function doShare(kind) {
@@ -428,7 +448,7 @@ function goHome() {
   SubwayMap.setInteractive(false);
   SubwayMap.hideFocus();
   // 홈 배경용 전체 노선도
-  State.network = buildNetwork(LINES.map(l => l.id));
+  State.network = buildNetwork(regionLineIds(), {displayLineIds: regionLineIds()});
   SubwayMap.render(State.network);
 }
 
@@ -439,7 +459,7 @@ function startStudy() {
   cancelAnimationFrame(State.timerFrame);
 
   // 전체 노선 + 모든 역을 표시
-  State.network = buildNetwork(LINES.map(l => l.id), { displayLineIds: LINES.map(l => l.id) });
+  State.network = buildNetwork(regionLineIds(), { displayLineIds: regionLineIds() });
   SubwayMap.render(State.network);
 
   document.body.classList.remove("at-home", "at-end", "in-game");
@@ -459,10 +479,49 @@ function exitStudy() {
   goHome();
 }
 
+/* ---------------- 지역 전환 ---------------- */
+// 지역을 바꾸고: 커스텀 선택 초기화, core 모드 가시성 조정,
+// 배경 노선도를 부드럽게 전환, 모드 라디오 상태 정리
+function selectRegion(region) {
+  if (region === State.region) return;
+  State.region = region;
+  State.customLines.clear();
+
+  // 지역 버튼 활성 표시
+  document.querySelectorAll(".region-btn").forEach(b =>
+    b.classList.toggle("active", b.dataset.region === region));
+
+  // 부산은 1~9호선(core) 모드가 없음 → core 카드 숨기고, core 선택중이었으면 all로
+  const isBusan = region === "busan";
+  const coreOption = document.querySelector('.mode-option.core-only');
+  if (coreOption) coreOption.style.display = isBusan ? "none" : "";
+  // 부산이면 모드 선택을 2칸 그리드로 (전체/커스텀이 절반씩 차지)
+  const modeSelect = document.querySelector('.mode-select');
+  if (modeSelect) modeSelect.classList.toggle("two-cols", isBusan);
+  if (isBusan && State.mode === "core") {
+    State.mode = "all";
+    const allRadio = document.querySelector('input[name="mode"][value="all"]');
+    if (allRadio) allRadio.checked = true;
+  }
+
+  // 커스텀 선택창을 현재 지역 노선으로 다시 그림
+  buildCustomPicker();
+  $("#custom-lines").classList.toggle("show", State.mode === "custom");
+  updateStartButton();
+
+  // 배경 노선도를 현재 지역으로 전환 (홈 화면일 때만 즉시 반영)
+  State.network = buildNetwork(regionLineIds(), { displayLineIds: regionLineIds() });
+  SubwayMap.render(State.network);
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   SubwayMap.init($("#map-container"));
   buildCustomPicker();
   goHome();
+
+  // 지역 선택 (수도권 / 부산)
+  document.querySelectorAll(".region-btn").forEach(btn =>
+    btn.addEventListener("click", () => selectRegion(btn.dataset.region)));
 
   // 노선 범위 선택
   document.querySelectorAll('input[name="mode"]').forEach(radio => {
