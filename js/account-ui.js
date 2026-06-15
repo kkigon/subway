@@ -13,6 +13,38 @@
   function lineName(id) { const l = lineById(id); return l ? l.name : id; }
   function lineDarkText(id) { const l = lineById(id); return l && l.darkText; }
 
+  /* ---------- 인앱 브라우저 로그인 처리 ---------- */
+  // 카카오톡 등 인앱 브라우저에서 구글 로그인을 누르면 외부 브라우저로 유도
+  function handleInAppLogin() {
+    const name = InAppBrowser.label() || "인앱 브라우저";
+    // 카카오톡·라인·안드로이드 → 외부 브라우저 강제 오픈 시도
+    const escaped = InAppBrowser.tryEscape(location.href);
+    if (escaped) return; // 외부 브라우저로 넘어감
+
+    // iOS 기타 인앱 브라우저 → 직접 탈출 불가, 안내 모달 표시
+    openInAppGuide(name);
+  }
+
+  function openInAppGuide(name) {
+    const modal = $("#inapp-modal");
+    if (!modal) {
+      // 모달이 없으면 최소한 토스트로 안내
+      if (typeof toast === "function") {
+        toast("구글 로그인은 크롬·사파리에서 가능해요. 우측 메뉴(···)에서 ‘다른 브라우저로 열기’를 눌러주세요.");
+      }
+      return;
+    }
+    const msg = $("#inapp-msg");
+    if (msg) {
+      msg.innerHTML = `지금 <b>${escapeHtml(name)}</b> 안에서 열려 있어, 구글 로그인이 차단돼요.<br>
+        아래 방법으로 <b>크롬·사파리</b> 같은 기본 브라우저에서 열어주세요.`;
+    }
+    // 현재 주소를 복사용으로 채움
+    const urlBox = $("#inapp-url");
+    if (urlBox) urlBox.value = location.href;
+    openModal("#inapp-modal");
+  }
+
   /* ---------- 상단 우측 계정 버튼 ---------- */
   function renderAccountButton() {
     const wrap = $("#account-area");
@@ -26,7 +58,14 @@
       btn.className = "account-btn login";
       btn.type = "button";
       btn.textContent = "구글로 로그인";
-      btn.addEventListener("click", () => Account.signInWithGoogle());
+      btn.addEventListener("click", () => {
+        // 인앱 브라우저(카카오톡 등)에서는 구글 OAuth가 차단되므로 외부 브라우저로 유도
+        if (typeof InAppBrowser !== "undefined" && InAppBrowser.isInApp()) {
+          handleInAppLogin();
+          return;
+        }
+        Account.signInWithGoogle();
+      });
       wrap.appendChild(btn);
       return;
     }
@@ -261,10 +300,47 @@
     document.querySelectorAll(".modal-backdrop").forEach(bd =>
       bd.addEventListener("click", e => { if (e.target === bd) closeModal("#" + bd.id); }));
 
+    // 인앱 안내 모달: 주소 복사 버튼
+    $("#inapp-copy")?.addEventListener("click", async () => {
+      const urlBox = $("#inapp-url");
+      try {
+        await navigator.clipboard.writeText(urlBox.value);
+        $("#inapp-copy").textContent = "복사됨!";
+        setTimeout(() => { $("#inapp-copy").textContent = "주소 복사"; }, 1500);
+      } catch (e) {
+        urlBox.select(); document.execCommand("copy");
+        $("#inapp-copy").textContent = "복사됨!";
+        setTimeout(() => { $("#inapp-copy").textContent = "주소 복사"; }, 1500);
+      }
+    });
+    // 인앱 안내 모달: 외부 브라우저로 열기 다시 시도
+    $("#inapp-open")?.addEventListener("click", () => {
+      if (typeof InAppBrowser !== "undefined") InAppBrowser.tryEscape(location.href);
+    });
+
+    // 인앱 브라우저에서 처음 들어온 경우, 상단에 작은 안내 배너 표시
+    if (typeof InAppBrowser !== "undefined" && InAppBrowser.isInApp() && Account.isConfigured()) {
+      showInAppBanner();
+    }
+
     // 로그인/프로필 상태가 바뀌면 버튼 다시 그림
     Account.onChange(renderAccountButton);
     Account.init().then(renderAccountButton);
   });
+
+  function showInAppBanner() {
+    const banner = $("#inapp-banner");
+    if (!banner) return;
+    const name = InAppBrowser.label() || "인앱 브라우저";
+    const txt = $("#inapp-banner-text");
+    if (txt) txt.innerHTML = `${escapeHtml(name)}에서는 구글 로그인이 안 돼요. <u>외부 브라우저로 열기</u>`;
+    banner.classList.add("show");
+    banner.addEventListener("click", (e) => {
+      if (e.target.closest("#inapp-banner-close")) { banner.classList.remove("show"); return; }
+      // 배너 본문 클릭 → 외부 브라우저 시도/안내
+      handleInAppLogin();
+    });
+  }
 
   // 다른 스크립트에서 쓸 수 있게 일부 노출
   window.AccountUI = { renderAccountButton, openRanking, openMyPage };
