@@ -365,10 +365,10 @@ function scoreMessage(score) {
     if (score >= 1) return "다음엔 더 멀리 갈 수 있어요!";
     return "괜찮아요, 첫 역부터 다시!";
   }
-  if (score >= 25) return "이게 말이 되는 실력인가요???";
+  if (score >= 25) return "이게 말이 되는 경우인가요???";
   if (score >= 18) return "당신은 걸어다니는 노선도!";
   if (score >= 12) return "철도공사 직원도 깜짝 놀랄 실력!";
-  if (score >= 6) return "수도권 지리 좀 아는데요? 한 판 더?";
+  if (score >= 6) return "지리 좀 공부하셨나봐요? 한 판 더?";
   return "다음 열차가 곧 도착합니다. 다시 도전!";
 }
 
