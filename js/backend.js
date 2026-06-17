@@ -210,6 +210,8 @@ const Account = (() => {
     hasProfile: () => !!profile,
     getProfile: () => profile,
     getEmail: () => session?.user?.email || null,
+    getUserId: () => session?.user?.id || null,
+    getClient: () => client,          // 대전 모드(Realtime)에서 사용
     signInWithGoogle, signOut,
     createProfile, updateThemeLine, updateNickname,
     savePlay, myPlays, myBest, weeklyRanking, nextResetText,
