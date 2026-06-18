@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>지하철 게임 — 60초 역이름 맞추기</title>
+  <meta name="description" content="수도권 지하철 노선도를 보고 60초 안에 역 이름을 맞추는 게임">
+  <!-- 파비콘 (탭 아이콘) -->
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <meta name="theme-color" content="#0052A4">
+  <meta property="og:title" content="지하철 게임 🚇">
+  <meta property="og:description" content="60초 안에 지하철역 이름을 몇 개나 맞출 수 있을까?">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js" crossorigin="anonymous"></script>
+  <script>Kakao.init("a8047939efe6459542051dbe3e6f11f7");</script>
+</head>
+<body class="at-home">
+
+  <!-- 노선도 (홈 → 게임 → 엔딩까지 한 화면) -->
+  <div id="map-container" aria-hidden="true"></div>
+
+  <!-- 우측 상단 계정 영역 (로그인 버튼 / 닉네임 태그) -->
+  <div id="account-area" class="account-area"></div>
+
+  <!-- 인앱 브라우저(카카오톡 등) 안내 배너 -->
+  <div id="inapp-banner" class="inapp-banner">
+    <span id="inapp-banner-text" class="inapp-banner-text"></span>
+    <button id="inapp-banner-close" type="button" class="inapp-banner-close" aria-label="닫기">✕</button>
+  </div>
+
+  <!-- 게임 중 상단 HUD -->
+  <header id="hud">
+    <div class="hud-left">
+      <button id="btn-hint" class="hint-btn" type="button">
+        💡 힌트 <span class="hint-pill"><span id="hint-count">3</span></span>
+      </button>
+    </div>
+    <div id="timer" class="timer">1:00</div>
+    <div id="endless-badge" class="endless-badge">🔥 연속</div>
+    <div class="hud-right">
+      <div class="score-box"><span class="score-label">점수</span><span id="score">0</span></div>
+    </div>
+  </header>
+
+  <!-- 정답/오답 피드백 -->
+  <div id="feedback" class="feedback" role="status"></div>
+
+  <!-- 게임 중 하단 입력 패널 -->
+  <section id="answer-panel">
+    <div class="question-row">
+      <div id="question-lines" class="question-lines"></div>
+      <span id="question-text" class="question-text">이 역의 이름은?</span>
+    </div>
+    <div id="hint-display" class="hint-display">초성 <strong id="hint-chars"></strong></div>
+    <div id="suggestions" class="suggestions"></div>
+    <div class="input-row">
+      <input id="answer-input" type="text" inputmode="text" autocomplete="off"
+             placeholder="역 이름을 입력하세요" aria-label="역 이름 입력">
+      <button id="btn-submit" type="button" class="submit-btn">제출</button>
+    </div>
+  </section>
+
+  <!-- 홈 화면 -->
+  <div id="home-screen" class="overlay">
+    <div class="overlay-card home-card">
+      <div class="title-plate">
+        <span class="title-dot"></span>
+        <h1>지하철 게임</h1>
+        <span class="title-dot"></span>
+      </div>
+      <p class="tagline">노선도를 보고 60초 안에 역 이름을 맞추세요</p>
+
+      <div class="region-select" role="group" aria-label="지역 선택">
+        <button type="button" class="region-btn active" data-region="seoul">수도권</button>
+        <button type="button" class="region-btn" data-region="busan">부산</button>
+      </div>
+
+      <fieldset class="mode-select">
+        <legend class="sr-only">게임 모드 선택</legend>
+        <label class="mode-option core-only">
+          <input type="radio" name="mode" value="core" checked>
+          <span class="mode-card">
+            <strong>1~9호선</strong>
+            <small>서울 지하철 본선만</small>
+          </span>
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="mode" value="all">
+          <span class="mode-card">
+            <strong>전체</strong>
+            <small>모든 노선을 빠짐없이 전부</small>
+          </span>
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="mode" value="custom">
+          <span class="mode-card">
+            <strong>커스텀</strong>
+            <small>원하는 노선만 골라서</small>
+          </span>
+        </label>
+      </fieldset>
+
+      <div id="custom-lines" class="custom-lines"></div>
+
+      <fieldset class="play-mode-select">
+        <legend class="sr-only">플레이 모드 선택</legend>
+        <label class="play-mode-option">
+          <input type="radio" name="playmode" value="timed" checked>
+          <span class="play-mode-card">
+            <strong>⏱️ 1분 도전</strong>
+            <small>60초 동안 많이 맞히기</small>
+          </span>
+        </label>
+        <label class="play-mode-option">
+          <input type="radio" name="playmode" value="endless">
+          <span class="play-mode-card">
+            <strong>🔥 연속 모드</strong>
+            <small>틀리면 끝! 최대 연속 기록</small>
+          </span>
+        </label>
+      </fieldset>
+
+      <button id="btn-start" class="primary-btn" type="button">게임 시작</button>
+      <div class="home-sub-btns">
+        <button id="btn-study" class="study-btn" type="button">📖 공부 모드</button>
+        <button id="btn-ranking" class="rank-open-btn" type="button">🏆 랭킹</button>
+      </div>
+      <p class="rule-note">힌트는 3개가 주어지고, 힌트를 쓰면 초성이 보여요!</p>
+    </div>
+  </div>
+
+  <!-- 엔딩 화면 -->
+  <div id="end-screen" class="overlay">
+    <div class="overlay-card end-card">
+      <p id="end-label" class="end-label">최종 점수</p>
+      <p class="end-score"><span id="final-score">0</span><small id="final-score-unit">역</small></p>
+      <p id="final-message" class="end-message"></p>
+      <button id="btn-retry" class="primary-btn" type="button">다시하기</button>
+      <div class="end-stack-btns">
+        <button id="btn-ranking-end" class="rank-open-btn" type="button">🏆 랭킹</button>
+        <button id="btn-change-mode" class="ghost-btn" type="button">모드 변경</button>
+      </div>
+      <div class="share-row">
+        <button class="share-btn" data-share="native" type="button">📤 공유</button>
+        <button class="share-btn" data-share="kakao" type="button">💬 카카오톡</button>
+        <button class="share-btn" data-share="x" type="button">𝕏 포스트</button>
+        <button class="share-btn" data-share="copy" type="button">🔗 링크 복사</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 공부 모드 바 -->
+  <div id="study-bar" class="study-bar">
+    <button id="btn-exit-study" class="study-exit" type="button">← 나가기</button>
+    <span class="study-title">📖 공부 모드</span>
+    <span class="study-tip">드래그로 이동 · 휠/핀치로 확대</span>
+  </div>
+
+  <!-- ============ 모달들 ============ -->
+
+  <!-- 첫 로그인: 프로필 설정 -->
+  <div id="profile-modal" class="modal-backdrop">
+    <div class="modal-card">
+      <h2 class="modal-title">프로필을 만들어요</h2>
+      <label class="field-label" for="profile-nick">닉네임 (1~12자)</label>
+      <input id="profile-nick" class="field-input" type="text" maxlength="12" placeholder="예: 1호선의전설" autocomplete="off">
+      <label class="field-label">테마 노선 (나를 대표하는 노선)</label>
+      <div id="profile-theme-grid" class="theme-grid"></div>
+      <p id="profile-error" class="field-msg no"></p>
+      <div class="modal-actions">
+        <button id="profile-cancel" class="ghost-btn" type="button">로그아웃</button>
+        <button id="profile-save" class="primary-btn slim" type="button">시작하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 랭킹 -->
+  <div id="ranking-modal" class="modal-backdrop">
+    <div class="modal-card">
+      <button class="modal-x" type="button" data-close-modal="ranking-modal" aria-label="닫기">✕</button>
+      <h2 class="modal-title">🏆 주간 랭킹</h2>
+      <p id="ranking-reset" class="rank-reset"></p>
+      <div class="rank-region-tabs">
+        <button class="rank-region-tab active" type="button" data-region="seoul">수도권</button>
+        <button class="rank-region-tab" type="button" data-region="busan">부산</button>
+      </div>
+      <div class="rank-tabs" id="rank-line-tabs">
+        <button class="rank-tab active" type="button" data-mode="core">1~9호선</button>
+        <button class="rank-tab" type="button" data-mode="all">전체 노선</button>
+      </div>
+      <p class="rank-note">⏱️ 1분 도전 모드 기록만 집계돼요</p>
+      <div id="ranking-body" class="rank-body"></div>
+    </div>
+  </div>
+
+  <!-- 마이페이지 -->
+  <div id="mypage-modal" class="modal-backdrop">
+    <div class="modal-card">
+      <button class="modal-x" type="button" data-close-modal="mypage-modal" aria-label="닫기">✕</button>
+      <h2 class="modal-title">마이페이지</h2>
+      <div class="mypage-head">
+        <span id="mypage-nicktag"></span>
+        <span id="mypage-email" class="mypage-email"></span>
+      </div>
+
+      <label class="field-label">닉네임 변경</label>
+      <div class="inline-field">
+        <input id="mypage-nick" class="field-input" type="text" maxlength="12" autocomplete="off">
+        <button id="mypage-nick-save" class="primary-btn slim" type="button">변경</button>
+      </div>
+      <p id="mypage-nick-msg" class="field-msg"></p>
+
+      <label class="field-label">테마 노선</label>
+      <div id="mypage-theme-grid" class="theme-grid"></div>
+
+      <label class="field-label">내 최고 기록(1분 모드)</label>
+      <div id="mypage-best" class="best-row"></div>
+
+      <label class="field-label">플레이 기록 (1분 모드)</label>
+      <div id="mypage-plays" class="plays-list"></div>
+
+      <div class="modal-actions">
+        <button id="mypage-logout" class="ghost-btn" type="button">로그아웃</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 인앱 브라우저 안내 모달 (iOS 등 강제 탈출이 안 되는 경우) -->
+  <div id="inapp-modal" class="modal-backdrop">
+    <div class="modal-card">
+      <button class="modal-x" type="button" data-close-modal="inapp-modal" aria-label="닫기">✕</button>
+      <h2 class="modal-title">🌐 외부 브라우저로 열어주세요</h2>
+      <p id="inapp-msg" class="inapp-msg"></p>
+      <div class="inapp-steps">
+        <p><b>방법 1.</b> 화면 우측 위/아래의 메뉴(<b>···</b> 또는 공유 아이콘)를 누르고<br>
+          <b>‘다른 브라우저로 열기’</b> 또는 <b>‘Chrome/Safari로 열기’</b>를 선택하세요.</p>
+        <p><b>방법 2.</b> 아래 주소를 복사해서 크롬·사파리 주소창에 붙여넣으세요.</p>
+      </div>
+      <div class="inline-field">
+        <input id="inapp-url" class="field-input" type="text" readonly>
+        <button id="inapp-copy" class="primary-btn slim" type="button">주소 복사</button>
+      </div>
+      <div class="modal-actions" style="justify-content:center; margin-top:16px;">
+        <button id="inapp-open" class="rank-open-btn" type="button" style="flex:1;">외부 브라우저로 열기 다시 시도</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/data-busan.js"></script>
+  <script src="js/hangul.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/game.js"></script>
+
+  <!-- 백엔드(로그인/랭킹) — Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/backend.js"></script>
+  <script src="js/inapp-browser.js"></script>
+  <script src="js/account-ui.js"></script>
+</body>
+</html>
