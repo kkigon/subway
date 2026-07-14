@@ -6,10 +6,10 @@
    값 찾는 곳:
    Supabase 대시보드 → 왼쪽 맨 아래 ⚙️ "Project Settings"
      → "API" 메뉴
-       • Project URL          → SUPABASE_URL 에 붙여넣기
-       • Project API keys 의 "anon public" 키 → SUPABASE_ANON_KEY 에 붙여넣기
+       • Project URL → SUPABASE_URL 에 붙여넣기
+       • API Keys의 Publishable key → SUPABASE_ANON_KEY 에 붙여넣기
 
-   ⚠️ "anon public" 키는 브라우저에 공개돼도 안전하게 설계된 키야.
+   ⚠️ Publishable key는 브라우저에 공개돼도 안전하게 설계된 키야.
       (절대 "service_role" 키는 여기 넣지 마! 그건 비밀 키라 서버 전용이야.)
    ============================================================ */
 

@@ -46,6 +46,12 @@
     </div>
   </header>
 
+  <!-- 대전: 상단 실시간 점수판 -->
+  <div id="vs-scoreboard" class="vs-scoreboard" aria-hidden="true"></div>
+
+  <!-- 대전: 게임 시작 카운트다운 -->
+  <div id="vs-countdown" class="vs-countdown" aria-hidden="true"><span id="vs-countdown-num">3</span></div>
+
   <!-- 정답/오답 피드백 -->
   <div id="feedback" class="feedback" role="status"></div>
 
@@ -54,6 +60,7 @@
     <div class="question-row">
       <div id="question-lines" class="question-lines"></div>
       <span id="question-text" class="question-text">이 역의 이름은?</span>
+      <span id="vs-qtimer" class="vs-qtimer" aria-hidden="true">10</span>
     </div>
     <div id="hint-display" class="hint-display">초성 <strong id="hint-chars"></strong></div>
     <div id="suggestions" class="suggestions"></div>
@@ -125,6 +132,7 @@
       </fieldset>
 
       <button id="btn-start" class="primary-btn" type="button">게임 시작</button>
+      <button id="btn-versus" class="versus-btn" type="button">⚔️ 대전 모드</button>
       <div class="home-sub-btns">
         <button id="btn-study" class="study-btn" type="button">📖 공부 모드</button>
         <button id="btn-ranking" class="rank-open-btn" type="button">🏆 랭킹</button>
@@ -158,6 +166,110 @@
     <button id="btn-exit-study" class="study-exit" type="button">← 나가기</button>
     <span class="study-title">📖 공부 모드</span>
     <span class="study-tip">드래그로 이동 · 휠/핀치로 확대</span>
+  </div>
+
+  <!-- ============ 대전 모드 화면들 ============ -->
+
+  <!-- 대전 진입: 만들기 / 입장 -->
+  <div id="vs-entry-screen" class="overlay vs-screen">
+    <div class="overlay-card vs-card">
+      <div class="title-plate small">
+        <span class="title-dot"></span>
+        <h1>⚔️ 대전 모드</h1>
+        <span class="title-dot"></span>
+      </div>
+      <p class="tagline">친구와 실시간으로 역 이름 맞히기 대결!</p>
+
+      <button id="vs-create-btn" class="primary-btn" type="button">방 만들기</button>
+
+      <div class="vs-divider"><span>또는</span></div>
+
+      <label class="field-label" for="vs-code-input">초대 코드로 입장</label>
+      <div class="inline-field">
+        <input id="vs-code-input" class="field-input vs-code-field" type="text" inputmode="latin"
+               maxlength="6" placeholder="예: K7Q2M9" autocomplete="off">
+        <button id="vs-join-btn" class="primary-btn slim" type="button">입장하기</button>
+      </div>
+      <p id="vs-entry-error" class="field-msg no"></p>
+
+      <button id="vs-entry-back" class="ghost-btn" type="button">← 홈으로</button>
+    </div>
+  </div>
+
+  <!-- 대기실 -->
+  <div id="vs-lobby-screen" class="overlay vs-screen">
+    <div class="overlay-card vs-card">
+      <div class="vs-lobby-head">
+        <span class="vs-role-badge" id="vs-lobby-role">방장</span>
+        <span class="vs-myname">나: <b id="vs-my-name"></b></span>
+      </div>
+
+      <p class="vs-code-label">초대 코드</p>
+      <div class="vs-code-big" id="vs-lobby-code">------</div>
+
+      <div class="inline-field">
+        <input id="vs-lobby-link" class="field-input" type="text" readonly>
+        <button id="vs-copy-link" class="primary-btn slim" type="button">링크 복사</button>
+      </div>
+
+      <p class="field-label">참가자</p>
+      <div id="vs-players" class="vs-players"></div>
+
+      <!-- 방장 전용: 게임 설정 + 시작 -->
+      <div id="vs-host-controls" class="vs-host-controls">
+        <p class="field-label">게임 설정</p>
+
+        <div class="vs-setting-row">
+          <span class="vs-setting-label">지역</span>
+          <div class="vs-seg" id="vs-set-region">
+            <button type="button" class="vs-seg-btn active" data-region="seoul">수도권</button>
+            <button type="button" class="vs-seg-btn" data-region="busan">부산</button>
+          </div>
+        </div>
+
+        <div class="vs-setting-row">
+          <span class="vs-setting-label">노선</span>
+          <div class="vs-seg" id="vs-set-mode">
+            <button type="button" class="vs-seg-btn core-only active" data-mode="core">1~9호선</button>
+            <button type="button" class="vs-seg-btn" data-mode="all">전체</button>
+            <button type="button" class="vs-seg-btn" data-mode="custom">커스텀</button>
+          </div>
+        </div>
+
+        <div id="vs-custom-lines" class="vs-custom-lines"></div>
+
+        <div class="vs-setting-row">
+          <span class="vs-setting-label">시간</span>
+          <div class="vs-seg" id="vs-set-duration">
+            <button type="button" class="vs-seg-btn active" data-dur="60">1분</button>
+            <button type="button" class="vs-seg-btn" data-dur="180">3분</button>
+            <button type="button" class="vs-seg-btn" data-dur="300">5분</button>
+          </div>
+        </div>
+
+        <button id="vs-start-btn" class="primary-btn" type="button">게임 시작</button>
+      </div>
+      <p id="vs-guest-note" class="muted" style="display:none;">방장이 게임을 시작하길 기다리는 중…</p>
+
+      <button class="ghost-btn vs-leave-btn" type="button">← 나가기</button>
+    </div>
+  </div>
+
+  <!-- 대전: 최종 순위 화면 -->
+  <div id="vs-result-screen" class="overlay vs-screen">
+    <div class="overlay-card vs-card">
+      <div class="title-plate small">
+        <span class="title-dot"></span>
+        <h1>🏆 최종 순위</h1>
+        <span class="title-dot"></span>
+      </div>
+      <div id="vs-result-list" class="vs-result-list"></div>
+      <p id="vs-result-note" class="muted" style="margin:0 0 8px; font-size:13px;"></p>
+      <div id="vs-result-actions" class="vs-result-actions">
+        <button id="vs-again-btn" class="primary-btn" type="button">대기실로 돌아가기</button>
+        <button class="ghost-btn vs-leave-btn" type="button">← 나가기</button>
+      </div>
+    </div>
   </div>
 
   <!-- ============ 모달들 ============ -->
@@ -265,5 +377,7 @@
   <script src="js/backend.js"></script>
   <script src="js/inapp-browser.js"></script>
   <script src="js/account-ui.js"></script>
+  <script src="js/versus.js"></script>
+  <script src="js/versus-ui.js"></script>
 </body>
 </html>

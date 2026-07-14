@@ -11,6 +11,7 @@ const Account = (() => {
   let session = null;      // 현재 로그인 세션 (없으면 null)
   let profile = null;      // 현재 사용자 프로필 {id, nickname, theme_line}
   let ready = false;       // 초기화 완료 여부
+  let available = false;   // 키 검증/최초 API 호출까지 성공했는지
   const listeners = [];    // 로그인/프로필 변경 구독자
 
   function configured() {
@@ -34,20 +35,32 @@ const Account = (() => {
       console.warn("[Account] Supabase 라이브러리가 로드되지 않았습니다.");
       ready = true; notify(); return;
     }
-    client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    try {
+      client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // 현재 세션 읽기
-    const { data } = await client.auth.getSession();
-    session = data.session || null;
-    if (session) await loadProfile();
-
-    // 로그인/로그아웃 등 상태 변화 감지
-    client.auth.onAuthStateChange(async (_event, newSession) => {
-      session = newSession;
-      profile = null;
+      // 최초 요청까지 성공해야 "설정됨"이 아니라 실제 "사용 가능"으로 본다.
+      const { data, error } = await client.auth.getSession();
+      if (error) throw error;
+      const { error: healthError } = await client.from("rooms").select("code").limit(1);
+      if (healthError) throw healthError;
+      available = true;
+      session = data.session || null;
       if (session) await loadProfile();
-      notify();
-    });
+
+      // 로그인/로그아웃 등 상태 변화 감지
+      client.auth.onAuthStateChange(async (_event, newSession) => {
+        session = newSession;
+        profile = null;
+        if (session) await loadProfile();
+        notify();
+      });
+    } catch (e) {
+      console.warn("[Account] Supabase 연결 실패. Project URL과 Publishable key를 확인해주세요.", e && e.message ? e.message : e);
+      client = null;
+      session = null;
+      profile = null;
+      available = false;
+    }
 
     ready = true;
     notify();
@@ -206,10 +219,13 @@ const Account = (() => {
     init, onChange,
     isConfigured: configured,
     isReady: () => ready,
+    isAvailable: () => available,
     isLoggedIn: () => !!session,
     hasProfile: () => !!profile,
     getProfile: () => profile,
     getEmail: () => session?.user?.email || null,
+    getUserId: () => session?.user?.id || null,
+    getClient: () => client,          // 대전 모드(Realtime)에서 사용
     signInWithGoogle, signOut,
     createProfile, updateThemeLine, updateNickname,
     savePlay, myPlays, myBest, weeklyRanking, nextResetText,

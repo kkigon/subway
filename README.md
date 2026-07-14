@@ -17,3 +17,14 @@
 - GTX-A는 현재 분리 운행 중인 운정중앙-서울역 / 수서-동탄 구간 반영
 - 인천 1호선 검단 연장(검단호수공원·신검단중앙·아라) 포함
 - 노선 색상은 각 운영기관 공식 색상 사용
+
+## 대전 모드 서버 설정
+
+대전 모드는 Supabase Realtime과 Postgres RPC를 사용합니다.
+
+1. `js/supabase-config.js`에 Supabase의 현재 **Publishable key**를 설정합니다.
+2. 새 DB라면 `supabase/versus-step1-rooms.sql`을 먼저 실행합니다.
+3. `supabase/versus-multiplayer-authority.sql`을 Supabase SQL Editor에서 실행합니다.
+4. Supabase Realtime에서 Presence/Broadcast 사용이 허용되어 있는지 확인합니다. `rooms`와 기존 `game_states` 테이블의 Postgres Changes publication 등록은 3번 SQL이 처리합니다.
+
+참가자 온라인 상태는 Presence가 단일 진실이며, 방장·설정·게임 상태처럼 지속되어야 하는 값은 Postgres가 단일 진실입니다. 방장 변경은 클라이언트의 직접 테이블 수정이 아니라 원자적 RPC를 통해서만 이루어집니다.
