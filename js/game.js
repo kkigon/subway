@@ -10,7 +10,7 @@ const SUGGEST_LIMIT = 50; // 자동완성에 한 번에 보여줄 최대 추천 
 const $ = sel => document.querySelector(sel);
 
 const State = {
-  region: "seoul",       // seoul(수도권) | busan(부산)
+  region: "seoul",       // seoul(수도권) | busan(부산) | daegu(대구)
   mode: "core",          // core | all | custom (노선 범위)
   playMode: "timed",     // timed(1분 도전) | endless(연속 모드)
   customLines: new Set(),
@@ -165,7 +165,7 @@ function shuffle(arr) {
 
 /* ---------------- 대전 모드 게임 시작 ----------------
    config = {
-     region: 'seoul'|'busan',
+     region: 'seoul'|'busan'|'daegu',
      lineIds: [...],          // 출제 대상 노선 id
      playMode: 'timed'|'endless',
      duration: 60,            // 초 (timed일 때)
@@ -658,8 +658,9 @@ function scoreMessage(score) {
 }
 
 // 지역 이름
+const REGION_LABELS = { seoul: "수도권", busan: "부산", daegu: "대구" };
 function regionLabel() {
-  return State.region === "busan" ? "부산" : "수도권";
+  return REGION_LABELS[State.region] || "수도권";
 }
 
 // 현재 게임 모드를 사람이 읽을 수 있는 문구로 (지역 포함)
@@ -776,14 +777,14 @@ function selectRegion(region) {
   document.querySelectorAll(".region-btn").forEach(b =>
     b.classList.toggle("active", b.dataset.region === region));
 
-  // 부산은 1~9호선(core) 모드가 없음 → core 카드 숨기고, core 선택중이었으면 all로
-  const isBusan = region === "busan";
+  // 수도권 외 지역은 1~9호선(core) 모드가 없음 → core 카드 숨기고, core 선택중이었으면 all로
+  const noCoreMode = region !== "seoul";
   const coreOption = document.querySelector('.mode-option.core-only');
-  if (coreOption) coreOption.style.display = isBusan ? "none" : "";
-  // 부산이면 모드 선택을 2칸 그리드로 (전체/커스텀이 절반씩 차지)
+  if (coreOption) coreOption.style.display = noCoreMode ? "none" : "";
+  // core가 없는 지역이면 모드 선택을 2칸 그리드로 (전체/커스텀이 절반씩 차지)
   const modeSelect = document.querySelector('.mode-select');
-  if (modeSelect) modeSelect.classList.toggle("two-cols", isBusan);
-  if (isBusan && State.mode === "core") {
+  if (modeSelect) modeSelect.classList.toggle("two-cols", noCoreMode);
+  if (noCoreMode && State.mode === "core") {
     State.mode = "all";
     const allRadio = document.querySelector('input[name="mode"][value="all"]');
     if (allRadio) allRadio.checked = true;

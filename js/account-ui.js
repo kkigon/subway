@@ -182,8 +182,9 @@
     const bestLabel = {
       "seoul:core": "수도권 1~9호선", "seoul:all": "수도권 전체", "seoul:custom": "수도권 커스텀",
       "busan:all": "부산 전체", "busan:custom": "부산 커스텀",
+      "daegu:all": "대구 전체", "daegu:custom": "대구 커스텀",
     };
-    const bestOrder = ["seoul:core", "seoul:all", "seoul:custom", "busan:all", "busan:custom"];
+    const bestOrder = ["seoul:core", "seoul:all", "seoul:custom", "busan:all", "busan:custom", "daegu:all", "daegu:custom"];
     $("#mypage-best").innerHTML = bestOrder
       .filter(k => best[k] !== undefined)
       .map(k => `<div class="best-card"><span class="best-mode">${bestLabel[k] || k}</span><span class="best-score">${best[k]}</span><span class="best-unit">역</span></div>`)
@@ -226,12 +227,12 @@
     document.querySelectorAll(".rank-region-tab").forEach(t =>
       t.classList.toggle("active", t.dataset.region === region));
 
-    // 부산은 'all' 한 가지만, 수도권은 core/all 둘 다
-    const isBusan = region === "busan";
+    // 부산/대구는 'all' 한 가지만, 수도권은 core/all 둘 다
+    const noCoreMode = region !== "seoul";
     const coreTab = document.querySelector('.rank-tab[data-mode="core"]');
-    if (coreTab) coreTab.style.display = isBusan ? "none" : "";
-    // 부산이면 강제로 all 탭
-    if (isBusan) rankTab = "all";
+    if (coreTab) coreTab.style.display = noCoreMode ? "none" : "";
+    // core가 없는 지역이면 강제로 all 탭
+    if (noCoreMode) rankTab = "all";
     else if (rankTab !== "core" && rankTab !== "all") rankTab = "core";
     setRankTab(rankTab);
   }
