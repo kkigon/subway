@@ -144,7 +144,7 @@
           <button type="button" class="game-duration-btn" data-duration="120">120초</button>
           <button type="button" class="game-duration-btn" data-duration="300">300초</button>
         </div>
-        <small>60초 도전만 주간 랭킹에 기록돼요</small>
+        <small>주간 랭킹은 제한 시간별로 따로 집계돼요</small>
       </div>
 
       <button id="btn-start" class="primary-btn" type="button">게임 시작</button>
@@ -330,7 +330,14 @@
         <button class="rank-tab active" type="button" data-mode="core">1~9호선</button>
         <button class="rank-tab" type="button" data-mode="all">전체 노선</button>
       </div>
-      <p class="rank-note">⏱️ 1분 도전 모드 기록만 집계돼요</p>
+      <div class="rank-duration-tabs" id="rank-duration-tabs" role="group" aria-label="랭킹 제한 시간">
+        <button class="rank-duration-tab" type="button" data-duration="10">10초</button>
+        <button class="rank-duration-tab" type="button" data-duration="30">30초</button>
+        <button class="rank-duration-tab active" type="button" data-duration="60">60초</button>
+        <button class="rank-duration-tab" type="button" data-duration="120">120초</button>
+        <button class="rank-duration-tab" type="button" data-duration="300">300초</button>
+      </div>
+      <p class="rank-note">⏱️ 제한 시간별 최고 기록을 따로 집계해요</p>
       <div id="ranking-body" class="rank-body"></div>
     </div>
   </div>
@@ -355,10 +362,10 @@
       <label class="field-label">테마 노선</label>
       <div id="mypage-theme-grid" class="theme-grid"></div>
 
-      <label class="field-label">내 최고 기록(1분 모드)</label>
+      <label class="field-label">내 최고 기록(시간별)</label>
       <div id="mypage-best" class="best-row"></div>
 
-      <label class="field-label">플레이 기록 (1분 모드)</label>
+      <label class="field-label">플레이 기록</label>
       <div id="mypage-plays" class="plays-list"></div>
 
       <div class="modal-actions">

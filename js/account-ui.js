@@ -181,21 +181,26 @@
     const best = await Account.myBest();
     const bestLabel = {};
     const bestOrder = [];
+    const durations = [10, 30, 60, 120, 300];
     for (const [region, label] of Object.entries(REGION_LABELS)) {
       const hasCore = regionSupportsCore(region);
       if (hasCore) {
-        bestLabel[`${region}:core`] = `${label} 1~9호선`;
-        bestOrder.push(`${region}:core`);
+        for (const duration of durations) {
+          bestLabel[`${region}:core:${duration}`] = `${label} 1~9호선 · ${duration}초`;
+          bestOrder.push(`${region}:core:${duration}`);
+        }
       }
       for (const mode of ["all", "custom"]) {
-        bestLabel[`${region}:${mode}`] = `${label} ${mode === "all" ? "전체" : "커스텀"}`;
-        bestOrder.push(`${region}:${mode}`);
+        for (const duration of durations) {
+          bestLabel[`${region}:${mode}:${duration}`] = `${label} ${mode === "all" ? "전체" : "커스텀"} · ${duration}초`;
+          bestOrder.push(`${region}:${mode}:${duration}`);
+        }
       }
     }
     $("#mypage-best").innerHTML = bestOrder
       .filter(k => best[k] !== undefined)
       .map(k => `<div class="best-card"><span class="best-mode">${bestLabel[k] || k}</span><span class="best-score">${best[k]}</span><span class="best-unit">역</span></div>`)
-      .join("") || `<p class="muted">아직 기록이 없어요. 1분 도전 모드를 플레이해보세요!</p>`;
+      .join("") || `<p class="muted">아직 기록이 없어요. 시간 도전 모드를 플레이해보세요!</p>`;
 
     // 플레이 기록 목록
     const plays = await Account.myPlays(50);
@@ -220,12 +225,16 @@
   /* ---------- 랭킹 모달 ---------- */
   let rankRegion = "seoul";  // 랭킹에서 보고 있는 지역
   let rankTab = "core";      // 랭킹에서 보고 있는 노선 범위(core/all)
+  let rankDuration = 60;      // 랭킹에서 보고 있는 제한 시간(초)
 
   async function openRanking() {
     openModal("#ranking-modal");
     $("#ranking-reset").textContent = "⏳ " + Account.nextResetText();
     // 게임에서 현재 선택한 지역으로 시작 (없으면 수도권)
     const cur = (typeof State !== "undefined" && State.region) ? State.region : "seoul";
+    const duration = (typeof State !== "undefined" && [10, 30, 60, 120, 300].includes(State.gameDuration))
+      ? State.gameDuration : 60;
+    setRankDuration(duration, false);
     setRankRegion(cur);
   }
 
@@ -249,6 +258,13 @@
     loadRanking();
   }
 
+  function setRankDuration(duration, reload = true) {
+    rankDuration = duration;
+    document.querySelectorAll(".rank-duration-tab").forEach(tab =>
+      tab.classList.toggle("active", Number(tab.dataset.duration) === duration));
+    if (reload) loadRanking();
+  }
+
   async function loadRanking() {
     const body = $("#ranking-body");
     body.innerHTML = `<p class="muted">불러오는 중…</p>`;
@@ -258,7 +274,7 @@
     }
     // DB에는 region별 mode를 합쳐 "seoul:core" 같은 키로 저장한다.
     const rankKey = `${rankRegion}:${rankTab}`;
-    const rows = await Account.weeklyRanking(rankKey, 50);
+    const rows = await Account.weeklyRanking(rankKey, rankDuration, 50);
     const myId = Account.getProfile()?.id;
     if (rows.length === 0) {
       body.innerHTML = `<p class="muted">이번 주 기록이 아직 없어요. 첫 주자가 되어보세요!</p>`;
@@ -283,11 +299,13 @@
   // 시간제한 모드 한 판이 끝나면 game.js가 이걸 부른다.
   window.onPlayFinished = async ({ score, region, mode, modeLabel, playMode, duration }) => {
     if (playMode !== "timed") return;          // 연속 모드는 저장 안 함
-    if (duration !== 60) return;                // 주간 랭킹은 기존 60초 기준 유지
     if (!Account.isLoggedIn() || !Account.hasProfile()) return; // 비로그인은 저장 안 함
     // 랭킹/기록 구분을 위해 region을 함께 저장. rankMode = "지역:모드"
     const rankMode = `${region || "seoul"}:${mode}`;
-    await Account.savePlay({ score, region: region || "seoul", mode, rankMode, modeLabel });
+    await Account.savePlay({
+      score, region: region || "seoul", mode, rankMode,
+      modeLabel: `${modeLabel} · ${duration}초`, duration,
+    });
   };
 
   /* ---------- 초기화 ---------- */
@@ -300,6 +318,8 @@
       t.addEventListener("click", () => setRankTab(t.dataset.mode)));
     document.querySelectorAll(".rank-region-tab").forEach(t =>
       t.addEventListener("click", () => setRankRegion(t.dataset.region)));
+    document.querySelectorAll(".rank-duration-tab").forEach(t =>
+      t.addEventListener("click", () => setRankDuration(Number(t.dataset.duration))));
 
     // 모달 닫기 버튼 / 배경 클릭
     document.querySelectorAll("[data-close-modal]").forEach(btn =>

@@ -791,6 +791,19 @@ body.modal-open { overflow: hidden; }
 .rank-region-tab.active {
   background: var(--ink); color: #fff; border-color: var(--ink);
 }
+.rank-duration-tabs {
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  gap: 6px; margin: 8px 0;
+}
+.rank-duration-tab {
+  border: 2px solid #dfe2e8; border-radius: 10px;
+  padding: 7px 2px; background: #fff; color: var(--ink-soft);
+  font: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
+  transition: all .15s var(--ease);
+}
+.rank-duration-tab:hover { border-color: #aab2bf; }
+.rank-duration-tab.active { background: var(--line-blue); border-color: var(--line-blue); color: #fff; }
+.rank-duration-tab:focus-visible { outline: 3px solid rgba(0, 82, 164, .35); outline-offset: 2px; }
 
 /* ============================================================
    인앱 브라우저(카카오톡 등) 안내 배너 & 모달
