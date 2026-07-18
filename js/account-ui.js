@@ -286,7 +286,10 @@
       return `<div class="rank-row${mine}">
         <span class="rank-num">${medal}</span>
         <span class="rank-nick">${nickTagHTML(r.nickname, r.theme_line)}</span>
-        <span class="rank-score">${r.best_score}<small>역</small></span>
+        <span class="rank-score">
+          <strong>${Number(r.adjusted_score).toFixed(1)}점</strong>
+          <small>${r.best_score}역 · 기록 ${Number(r.record_points).toFixed(1)} + 백분위 ${Number(r.percentile_bonus).toFixed(1)}</small>
+        </span>
       </div>`;
     }).join("");
   }
@@ -297,14 +300,14 @@
 
   /* ---------- game.js가 호출하는 훅 ---------- */
   // 시간제한 모드 한 판이 끝나면 game.js가 이걸 부른다.
-  window.onPlayFinished = async ({ score, region, mode, modeLabel, playMode, duration }) => {
+  window.onPlayFinished = async ({ score, region, mode, modeLabel, playMode, duration, theoreticalMax }) => {
     if (playMode !== "timed") return;          // 연속 모드는 저장 안 함
     if (!Account.isLoggedIn() || !Account.hasProfile()) return; // 비로그인은 저장 안 함
     // 랭킹/기록 구분을 위해 region을 함께 저장. rankMode = "지역:모드"
     const rankMode = `${region || "seoul"}:${mode}`;
     await Account.savePlay({
       score, region: region || "seoul", mode, rankMode,
-      modeLabel: `${modeLabel} · ${duration}초`, duration,
+      modeLabel: `${modeLabel} · ${duration}초`, duration, theoreticalMax,
     });
   };
 

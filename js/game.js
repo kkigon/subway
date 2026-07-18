@@ -646,6 +646,11 @@ function endGame() {
       modeLabel: modeLabel(),
       playMode: State.playMode,
       duration: State.gameDuration,
+      theoreticalMax: theoreticalMaxScore(
+        State.gameDuration,
+        State.network?.quizStations?.size || 1,
+        REVEAL_DELAY
+      ),
     });
   }
 }

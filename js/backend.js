@@ -153,7 +153,7 @@ const Account = (() => {
   }
 
   // 시간제한 모드 플레이 기록 저장 (연속 모드는 호출하지 않음)
-  async function savePlay({ score, region, mode, rankMode, modeLabel, duration }) {
+  async function savePlay({ score, region, mode, rankMode, modeLabel, duration, theoreticalMax }) {
     if (!client || !session) return false;
     const { error } = await client.from("plays").insert({
       user_id: session.user.id,
@@ -163,6 +163,7 @@ const Account = (() => {
       rank_mode: rankMode || `${region || "seoul"}:${mode}`,
       mode_label: modeLabel,
       duration_sec: duration,
+      theoretical_max: theoreticalMax,
     });
     if (error) { console.warn("[Account] 기록 저장 실패", error.message); return false; }
     return true;

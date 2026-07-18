@@ -730,8 +730,9 @@ body.modal-open { overflow: hidden; }
 .rank-row.mine { background: color-mix(in srgb, var(--line-blue) 12%, #fff); outline: 2px solid var(--line-blue); }
 .rank-num { font-size: 16px; font-weight: 800; min-width: 30px; text-align: center; }
 .rank-nick { flex: 1; display: flex; }
-.rank-score { font-size: 18px; font-weight: 800; }
-.rank-score small { font-size: 12px; font-weight: 700; color: var(--ink-soft); margin-left: 2px; }
+.rank-score { display: flex; flex-direction: column; align-items: flex-end; font-size: 18px; font-weight: 800; }
+.rank-score strong { white-space: nowrap; }
+.rank-score small { max-width: 190px; font-size: 10.5px; line-height: 1.2; text-align: right; font-weight: 700; color: var(--ink-soft); }
 
 /* ---------------- 마이페이지 ---------------- */
 .mypage-head { display: flex; align-items: center; gap: 10px; justify-content: center; margin-bottom: 6px; flex-wrap: wrap; }
