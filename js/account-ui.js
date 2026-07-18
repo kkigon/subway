@@ -281,8 +281,9 @@
 
   /* ---------- game.js가 호출하는 훅 ---------- */
   // 시간제한 모드 한 판이 끝나면 game.js가 이걸 부른다.
-  window.onPlayFinished = async ({ score, region, mode, modeLabel, playMode }) => {
+  window.onPlayFinished = async ({ score, region, mode, modeLabel, playMode, duration }) => {
     if (playMode !== "timed") return;          // 연속 모드는 저장 안 함
+    if (duration !== 60) return;                // 주간 랭킹은 기존 60초 기준 유지
     if (!Account.isLoggedIn() || !Account.hasProfile()) return; // 비로그인은 저장 안 함
     // 랭킹/기록 구분을 위해 region을 함께 저장. rankMode = "지역:모드"
     const rankMode = `${region || "seoul"}:${mode}`;

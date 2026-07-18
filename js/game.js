@@ -2,7 +2,7 @@
    지하철 게임 — 메인 게임 로직
    ============================================================ */
 
-const GAME_SECONDS = 60;
+const DEFAULT_GAME_SECONDS = 60;
 const HINTS_PER_GAME = 3;
 const REVEAL_DELAY = 950; // 정답 공개 후 다음 문제로 넘어가는 시간(ms)
 const SUGGEST_LIMIT = 50; // 자동완성에 한 번에 보여줄 최대 추천 개수 (이 이상은 스크롤)
@@ -12,7 +12,8 @@ const $ = sel => document.querySelector(sel);
 const State = {
   region: "seoul",       // REGION_LABELS의 지역 코드
   mode: "core",          // core | all | custom (노선 범위)
-  playMode: "timed",     // timed(1분 도전) | endless(연속 모드)
+  playMode: "timed",     // timed(시간 도전) | endless(연속 모드)
+  gameDuration: DEFAULT_GAME_SECONDS,
   customLines: new Set(),
   playing: false,
   studying: false,       // 공부 모드 여부
@@ -151,7 +152,7 @@ function startGame() {
   setTimeout(() => {
     nextQuestion();
     if (State.playMode === "timed") {
-      State.endAt = performance.now() + GAME_SECONDS * 1000;
+      State.endAt = performance.now() + State.gameDuration * 1000;
       tickTimer();
     } else {
       // 연속 모드: 시간 제한 없음
@@ -644,6 +645,7 @@ function endGame() {
       mode: State.mode,
       modeLabel: modeLabel(),
       playMode: State.playMode,
+      duration: State.gameDuration,
     });
   }
 }
@@ -686,7 +688,7 @@ function shareText() {
   if (State.playMode === "endless") {
     return `🚇 지하철 게임 — ${modeLabel()} · 연속 모드에서 ${State.score}개 역을 맞췄어요! 당신도 도전해보세요!`;
   }
-  return `🚇 지하철 게임 — ${modeLabel()}에서 60초 동안 ${State.score}개 역을 맞췄어요! 당신도 도전해보세요!`;
+  return `🚇 지하철 게임 — ${modeLabel()}에서 ${State.gameDuration}초 동안 ${State.score}개 역을 맞췄어요! 당신도 도전해보세요!`;
 }
 
 async function doShare(kind) {
@@ -823,9 +825,19 @@ document.addEventListener("DOMContentLoaded", () => {
       updateStartButton();
     });
   });
-  // 플레이 모드 선택 (1분 도전 / 연속 모드)
+  // 플레이 모드 선택 (시간 도전 / 연속 모드)
   document.querySelectorAll('input[name="playmode"]').forEach(radio => {
-    radio.addEventListener("change", () => { State.playMode = radio.value; });
+    radio.addEventListener("change", () => {
+      State.playMode = radio.value;
+      $("#game-duration-setting")?.classList.toggle("hidden", State.playMode !== "timed");
+    });
+  });
+  document.querySelectorAll(".game-duration-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      State.gameDuration = parseInt(btn.dataset.duration, 10) || DEFAULT_GAME_SECONDS;
+      document.querySelectorAll(".game-duration-btn").forEach(candidate =>
+        candidate.classList.toggle("active", candidate === btn));
+    });
   });
   updateStartButton();
 
