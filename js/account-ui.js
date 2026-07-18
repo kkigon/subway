@@ -182,7 +182,7 @@
     const bestLabel = {};
     const bestOrder = [];
     for (const [region, label] of Object.entries(REGION_LABELS)) {
-      const hasCore = LINES.some(line => (line.region || "seoul") === region && line.core);
+      const hasCore = regionSupportsCore(region);
       if (hasCore) {
         bestLabel[`${region}:core`] = `${label} 1~9호선`;
         bestOrder.push(`${region}:core`);
@@ -234,7 +234,7 @@
     document.querySelectorAll(".rank-region-tab").forEach(t =>
       t.classList.toggle("active", t.dataset.region === region));
 
-    const hasCore = LINES.some(line => (line.region || "seoul") === region && line.core);
+    const hasCore = regionSupportsCore(region);
     const coreTab = document.querySelector('.rank-tab[data-mode="core"]');
     if (coreTab) coreTab.style.display = hasCore ? "" : "none";
     if (!hasCore) rankTab = "all";

@@ -18,11 +18,21 @@ const DISPLAY_NAME = {
 // 지역 코드는 게임 기록·대전 방 설정에서도 공통으로 사용한다.
 const REGION_LABELS = {
   seoul: "수도권",
+  nationwide: "전국",
   busan: "부산",
   daegu: "대구",
   daejeon: "대전",
   gwangju: "광주",
 };
+
+function linesForRegion(region) {
+  if (region === "nationwide") return LINES;
+  return LINES.filter(line => (line.region || "seoul") === region);
+}
+
+function regionSupportsCore(region) {
+  return region === "seoul";
+}
 
 const LINES = [
   {

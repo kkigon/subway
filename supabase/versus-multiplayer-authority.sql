@@ -44,7 +44,7 @@ begin
   if coalesce(length(trim(p_host_name)), 0) < 1 or length(p_host_name) > 40 then
     raise exception 'invalid player name' using errcode = '22023';
   end if;
-  if p_region not in ('seoul', 'busan', 'daegu', 'daejeon', 'gwangju') then
+  if p_region not in ('seoul', 'nationwide', 'busan', 'daegu', 'daejeon', 'gwangju') then
     raise exception 'invalid region' using errcode = '22023';
   end if;
 
@@ -78,7 +78,7 @@ as $$
 declare
   v_room public.rooms;
 begin
-  if p_region not in ('seoul', 'busan', 'daegu', 'daejeon', 'gwangju')
+  if p_region not in ('seoul', 'nationwide', 'busan', 'daegu', 'daejeon', 'gwangju')
      or p_mode not in ('core', 'all', 'custom')
      or p_play_mode not in ('timed', 'endless')
      or p_duration < 10 or p_duration > 600 then

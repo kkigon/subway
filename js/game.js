@@ -73,10 +73,17 @@ const Sound = (() => {
 /* ---------------- 모드 / 지역 ---------------- */
 // 현재 지역에 속한 노선 목록
 function regionLines() {
-  return LINES.filter(l => (l.region || "seoul") === State.region);
+  return linesForRegion(State.region);
 }
 function regionLineIds() {
   return regionLines().map(l => l.id);
+}
+
+function regionMapOptions(displayLineIds = regionLineIds()) {
+  return {
+    displayLineIds,
+    regionLayout: State.region === "nationwide" ? "nationwide" : null,
+  };
 }
 
 function selectedLineIds() {
@@ -121,7 +128,7 @@ function startGame() {
   const ids = selectedLineIds();
   if (ids.length === 0) return;
 
-  State.network = buildNetwork(ids, {displayLineIds: regionLineIds()});
+  State.network = buildNetwork(ids, regionMapOptions());
   SubwayMap.render(State.network);
 
   State.pool = shuffle([...State.network.quizStations.keys()]);
@@ -180,7 +187,7 @@ function startVersusGame(config) {
   State.versus = true;
   State.versusDuration = config.duration || 60;
 
-  State.network = buildNetwork(config.lineIds, { displayLineIds: regionLineIds() });
+  State.network = buildNetwork(config.lineIds, regionMapOptions());
   SubwayMap.render(State.network);
 
   const validKeys = new Set(State.network.quizStations.keys());
@@ -733,7 +740,7 @@ function goHome() {
   SubwayMap.setInteractive(false);
   SubwayMap.hideFocus();
   // 홈 배경용 전체 노선도
-  State.network = buildNetwork(regionLineIds(), {displayLineIds: regionLineIds()});
+  State.network = buildNetwork(regionLineIds(), regionMapOptions());
   SubwayMap.render(State.network);
 }
 
@@ -744,7 +751,7 @@ function startStudy() {
   cancelAnimationFrame(State.timerFrame);
 
   // 전체 노선 + 모든 역을 표시
-  State.network = buildNetwork(regionLineIds(), { displayLineIds: regionLineIds() });
+  State.network = buildNetwork(regionLineIds(), regionMapOptions());
   SubwayMap.render(State.network);
 
   document.body.classList.remove("at-home", "at-end", "in-game");
@@ -777,7 +784,7 @@ function selectRegion(region) {
     b.classList.toggle("active", b.dataset.region === region));
 
   // core 노선이 없는 비수도권 지역은 전체/커스텀만 제공한다.
-  const hasCore = regionLines().some(line => line.core);
+  const hasCore = regionSupportsCore(region);
   const coreOption = document.querySelector('.mode-option.core-only');
   if (coreOption) coreOption.style.display = hasCore ? "" : "none";
   // core가 없으면 모드 선택을 2칸 그리드로 (전체/커스텀이 절반씩 차지)
@@ -795,7 +802,7 @@ function selectRegion(region) {
   updateStartButton();
 
   // 배경 노선도를 현재 지역으로 전환 (홈 화면일 때만 즉시 반영)
-  State.network = buildNetwork(regionLineIds(), { displayLineIds: regionLineIds() });
+  State.network = buildNetwork(regionLineIds(), regionMapOptions());
   SubwayMap.render(State.network);
 }
 
@@ -877,7 +884,7 @@ window.VersusGame = {
   buildOrder: buildVersusOrder,  // 방장이 호출: 문제 순서 생성
   applyState: applyVersusState,  // 방장 스냅샷 수신 → 화면 반영(자가치유)
   resolveLineIds(region, mode, customLines) {
-    const lines = LINES.filter(l => (l.region || "seoul") === region);
+    const lines = linesForRegion(region);
     if (mode === "core") {
       const core = lines.filter(l => l.core).map(l => l.id);
       return core.length ? core : lines.map(l => l.id);

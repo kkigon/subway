@@ -9,10 +9,10 @@ const sources = ["js/data.js", "js/data-busan.js", "js/data-nationwide.js", "js/
   .join("\n");
 const sandbox = {};
 vm.createContext(sandbox);
-vm.runInContext(`${sources}\nthis.snapshot = { LINES, ANCHORS, DISPLAY_NAME, REGION_LABELS, buildNetwork };`, sandbox);
+vm.runInContext(`${sources}\nthis.snapshot = { LINES, ANCHORS, DISPLAY_NAME, REGION_LABELS, linesForRegion, regionSupportsCore, buildNetwork };`, sandbox);
 
-const { LINES, ANCHORS, DISPLAY_NAME, REGION_LABELS, buildNetwork } = sandbox.snapshot;
-assert.deepEqual(Object.keys(REGION_LABELS), ["seoul", "busan", "daegu", "daejeon", "gwangju"]);
+const { LINES, ANCHORS, DISPLAY_NAME, REGION_LABELS, linesForRegion, regionSupportsCore, buildNetwork } = sandbox.snapshot;
+assert.deepEqual(Object.keys(REGION_LABELS), ["seoul", "nationwide", "busan", "daegu", "daejeon", "gwangju"]);
 
 const expectedLines = {
   busan: ["BS1", "BS2", "BS3", "BS4", "BSDH", "BSGH"],
@@ -28,6 +28,13 @@ for (const [region, ids] of Object.entries(expectedLines)) {
     assert.ok(Number.isFinite(station.x) && Number.isFinite(station.y), `${station.name} 좌표가 유효해야 한다`);
   }
 }
+
+const allLineIds = Array.from(LINES, line => line.id);
+assert.deepEqual(Array.from(linesForRegion("nationwide"), line => line.id), allLineIds);
+assert.equal(regionSupportsCore("nationwide"), false);
+const nationwide = buildNetwork(allLineIds, { regionLayout: "nationwide" });
+assert.ok(nationwide.stations.size > 700, "전국 노선도에 모든 권역 역이 포함되어야 한다");
+assert.ok(nationwide.bounds.maxX - nationwide.bounds.minX > 3500, "전국 노선도가 권역별로 펼쳐져야 한다");
 
 const expectedStationCounts = { DG1: 35, DG2: 29, DG3: 30, DGK: 7, DJ1: 22, GJ1: 20 };
 for (const [id, count] of Object.entries(expectedStationCounts)) {
