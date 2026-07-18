@@ -153,7 +153,7 @@ const Account = (() => {
   }
 
   // 시간제한 모드 플레이 기록 저장 (연속 모드는 호출하지 않음)
-  async function savePlay({ score, region, mode, rankMode, modeLabel }) {
+  async function savePlay({ score, region, mode, rankMode, modeLabel, duration, theoreticalMax }) {
     if (!client || !session) return false;
     const { error } = await client.from("plays").insert({
       user_id: session.user.id,
@@ -162,6 +162,8 @@ const Account = (() => {
       mode,
       rank_mode: rankMode || `${region || "seoul"}:${mode}`,
       mode_label: modeLabel,
+      duration_sec: duration,
+      theoretical_max: theoreticalMax,
     });
     if (error) { console.warn("[Account] 기록 저장 실패", error.message); return false; }
     return true;
@@ -172,7 +174,7 @@ const Account = (() => {
     if (!client || !session) return [];
     const { data, error } = await client
       .from("plays")
-      .select("score, region, mode, mode_label, created_at")
+      .select("score, region, mode, mode_label, duration_sec, created_at")
       .eq("user_id", session.user.id)
       .order("created_at", { ascending: false })
       .limit(limit);
@@ -180,21 +182,25 @@ const Account = (() => {
     return data || [];
   }
 
-  // 내 최고점 (지역+모드별) — 마이페이지 요약용
+  // 내 최고점 (지역+모드+제한시간별) — 마이페이지 요약용
   async function myBest() {
     const plays = await myPlays(500);
     const best = {};
     for (const p of plays) {
-      const key = `${p.region || "seoul"}:${p.mode}`;
+      const key = `${p.region || "seoul"}:${p.mode}:${p.duration_sec || 60}`;
       if (best[key] === undefined || p.score > best[key]) best[key] = p.score;
     }
-    return best; // { "seoul:core": 23, "busan:all": 12, ... } 형태
+    return best; // { "seoul:core:60": 23, "busan:all:30": 12, ... } 형태
   }
 
-  // 주간 랭킹 (mode: 'core' | 'all')
-  async function weeklyRanking(mode, limit = 50) {
+  // 주간 랭킹 (지역+노선 범위+제한시간별)
+  async function weeklyRanking(mode, duration, limit = 50) {
     if (!client) return [];
-    const { data, error } = await client.rpc("weekly_ranking", { p_mode: mode, p_limit: limit });
+    const { data, error } = await client.rpc("weekly_ranking_by_duration", {
+      p_mode: mode,
+      p_duration: duration,
+      p_limit: limit,
+    });
     if (error) { console.warn("[Account] 랭킹 조회 실패", error.message); return []; }
     return data || [];
   }

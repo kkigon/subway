@@ -393,6 +393,26 @@ body {
   outline: 3px solid rgba(0, 168, 77, .4); outline-offset: 2px;
 }
 
+.game-duration-setting {
+  display: flex; flex-direction: column; gap: 7px;
+  margin: -2px 0 16px; padding: 11px;
+  border: 1.5px solid #e1e4e9; border-radius: 14px;
+  background: #f8f9fb;
+}
+.game-duration-setting.hidden { display: none; }
+.game-duration-label { font-size: 12px; font-weight: 800; color: var(--ink-soft); }
+.game-duration-options { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.game-duration-btn {
+  border: 2px solid #d8dce3; border-radius: 10px; padding: 7px 3px;
+  background: #fff; color: var(--ink-soft); cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 800;
+  transition: all .15s var(--ease);
+}
+.game-duration-btn:hover { border-color: #aab2bf; }
+.game-duration-btn.active { background: var(--line-blue); border-color: var(--line-blue); color: #fff; }
+.game-duration-btn:focus-visible { outline: 3px solid rgba(0, 82, 164, .35); outline-offset: 2px; }
+.game-duration-setting small { font-size: 10.5px; color: var(--ink-soft); }
+
 .custom-lines {
   display: none;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -535,6 +555,9 @@ body {
   .play-mode-card { padding: 11px 8px; border-radius: 13px; }
   .play-mode-card strong { font-size: 14px; }
   .play-mode-card small { font-size: 10.5px; }
+  .game-duration-setting { padding: 9px; margin-bottom: 14px; }
+  .game-duration-options { gap: 4px; }
+  .game-duration-btn { padding: 7px 1px; font-size: 11.5px; }
   .custom-lines { grid-template-columns: repeat(2, 1fr); max-height: 168px; }
   .line-check { font-size: 12.5px; }
   .primary-btn { font-size: 17px; padding: 14px; }
@@ -707,8 +730,9 @@ body.modal-open { overflow: hidden; }
 .rank-row.mine { background: color-mix(in srgb, var(--line-blue) 12%, #fff); outline: 2px solid var(--line-blue); }
 .rank-num { font-size: 16px; font-weight: 800; min-width: 30px; text-align: center; }
 .rank-nick { flex: 1; display: flex; }
-.rank-score { font-size: 18px; font-weight: 800; }
-.rank-score small { font-size: 12px; font-weight: 700; color: var(--ink-soft); margin-left: 2px; }
+.rank-score { display: flex; flex-direction: column; align-items: flex-end; font-size: 18px; font-weight: 800; }
+.rank-score strong { white-space: nowrap; }
+.rank-score small { max-width: 190px; font-size: 10.5px; line-height: 1.2; text-align: right; font-weight: 700; color: var(--ink-soft); }
 
 /* ---------------- 마이페이지 ---------------- */
 .mypage-head { display: flex; align-items: center; gap: 10px; justify-content: center; margin-bottom: 6px; flex-wrap: wrap; }
@@ -739,13 +763,13 @@ body.modal-open { overflow: hidden; }
 }
 
 /* ============================================================
-   지역 선택 (수도권 / 부산) — 홈 화면 & 랭킹 모달
+   지역 선택 — 홈 화면 & 랭킹 모달
    ============================================================ */
 .region-select {
-  display: flex; gap: 8px; margin-bottom: 12px;
+  display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
 }
 .region-btn {
-  flex: 1; font: inherit; font-size: 15px; font-weight: 800;
+  flex: 1 1 72px; font: inherit; font-size: 15px; font-weight: 800;
   background: #f3f4f7; color: var(--ink-soft);
   border: 2px solid transparent; border-radius: 14px;
   padding: 11px; cursor: pointer;
@@ -758,9 +782,9 @@ body.modal-open { overflow: hidden; }
 }
 
 /* 랭킹 모달 지역 탭 */
-.rank-region-tabs { display: flex; gap: 8px; margin-bottom: 8px; }
+.rank-region-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 .rank-region-tab {
-  flex: 1; font: inherit; font-size: 14px; font-weight: 800;
+  flex: 1 1 72px; font: inherit; font-size: 14px; font-weight: 800;
   background: transparent; color: var(--ink-soft);
   border: 2px solid #e7e9ee; border-radius: 999px;
   padding: 8px; cursor: pointer; transition: all .2s;
@@ -768,6 +792,19 @@ body.modal-open { overflow: hidden; }
 .rank-region-tab.active {
   background: var(--ink); color: #fff; border-color: var(--ink);
 }
+.rank-duration-tabs {
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  gap: 6px; margin: 8px 0;
+}
+.rank-duration-tab {
+  border: 2px solid #dfe2e8; border-radius: 10px;
+  padding: 7px 2px; background: #fff; color: var(--ink-soft);
+  font: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
+  transition: all .15s var(--ease);
+}
+.rank-duration-tab:hover { border-color: #aab2bf; }
+.rank-duration-tab.active { background: var(--line-blue); border-color: var(--line-blue); color: #fff; }
+.rank-duration-tab:focus-visible { outline: 3px solid rgba(0, 82, 164, .35); outline-offset: 2px; }
 
 /* ============================================================
    인앱 브라우저(카카오톡 등) 안내 배너 & 모달

@@ -41,6 +41,21 @@ const ROUTE_VIA = {
   }
 };
 
+// 전국 보기에서는 각 권역 노선도를 하나의 캔버스 안에 타일처럼 배치한다.
+// 개별 지역 좌표는 그대로 유지하므로 지역별 보기의 품질에는 영향을 주지 않는다.
+const NATIONWIDE_LAYOUT = {
+  seoul:   { scale: 0.42, x: 0,    y: 0 },
+  busan:   { scale: 0.58, x: 2050, y: 80 },
+  daegu:   { scale: 0.58, x: 0,    y: 1650 },
+  daejeon: { scale: 0.62, x: 1650, y: 1600 },
+  gwangju: { scale: 0.62, x: 3050, y: 1600 },
+};
+
+function nationwidePoint(point, region) {
+  const tile = NATIONWIDE_LAYOUT[region || "seoul"] || NATIONWIDE_LAYOUT.seoul;
+  return [point[0] * tile.scale + tile.x, point[1] * tile.scale + tile.y];
+}
+
 // 한 세그먼트(역 키 배열)의 좌표 배열 계산
 function layoutSegment(keys) {
   const pts = new Array(keys.length).fill(null);
@@ -115,7 +130,10 @@ function buildNetwork(lineIds, options = {}) {
     const isActiveLine = activeSet.has(line.id);
 
     for (const seg of line.segments) {
-      const pts = layoutSegment(seg);
+      let pts = layoutSegment(seg);
+      if (options.regionLayout === "nationwide") {
+        pts = pts.map(point => nationwidePoint(point, line.region));
+      }
 
       // 노선은 항상 원래 색으로 그릴 것이므로 active 정보는 필요 없음
       paths.push({ line, points: pts });
@@ -182,7 +200,7 @@ function buildNetwork(lineIds, options = {}) {
     };
     // 특정 구간은 곡선 우회 경로(via)를 부여해 다른 노선과 겹치지 않게 한다.
     const route = ROUTE_VIA[k];
-    if (route) {
+    if (route && options.regionLayout !== "nationwide") {
       // route.lines가 있으면 해당 노선이 이 구간에 포함될 때만 적용
       const applies = !route.lines || route.lines.some(id => out.lines.includes(id));
       if (applies) {
