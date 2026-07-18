@@ -10,7 +10,7 @@ const SUGGEST_LIMIT = 50; // 자동완성에 한 번에 보여줄 최대 추천 
 const $ = sel => document.querySelector(sel);
 
 const State = {
-  region: "seoul",       // seoul(수도권) | busan(부산)
+  region: "seoul",       // REGION_LABELS의 지역 코드
   mode: "core",          // core | all | custom (노선 범위)
   playMode: "timed",     // timed(1분 도전) | endless(연속 모드)
   customLines: new Set(),
@@ -80,7 +80,7 @@ function regionLineIds() {
 }
 
 function selectedLineIds() {
-  // 부산은 core(1~9호선) 모드가 없으므로 all과 동일 처리
+  // core 노선이 없는 지역은 all과 동일 처리
   if (State.mode === "core") {
     const core = regionLines().filter(l => l.core).map(l => l.id);
     return core.length ? core : regionLineIds();
@@ -165,7 +165,7 @@ function shuffle(arr) {
 
 /* ---------------- 대전 모드 게임 시작 ----------------
    config = {
-     region: 'seoul'|'busan',
+     region: REGION_LABELS의 지역 코드,
      lineIds: [...],          // 출제 대상 노선 id
      playMode: 'timed'|'endless',
      duration: 60,            // 초 (timed일 때)
@@ -659,7 +659,7 @@ function scoreMessage(score) {
 
 // 지역 이름
 function regionLabel() {
-  return State.region === "busan" ? "부산" : "수도권";
+  return REGION_LABELS[State.region] || State.region;
 }
 
 // 현재 게임 모드를 사람이 읽을 수 있는 문구로 (지역 포함)
@@ -776,14 +776,14 @@ function selectRegion(region) {
   document.querySelectorAll(".region-btn").forEach(b =>
     b.classList.toggle("active", b.dataset.region === region));
 
-  // 부산은 1~9호선(core) 모드가 없음 → core 카드 숨기고, core 선택중이었으면 all로
-  const isBusan = region === "busan";
+  // core 노선이 없는 비수도권 지역은 전체/커스텀만 제공한다.
+  const hasCore = regionLines().some(line => line.core);
   const coreOption = document.querySelector('.mode-option.core-only');
-  if (coreOption) coreOption.style.display = isBusan ? "none" : "";
-  // 부산이면 모드 선택을 2칸 그리드로 (전체/커스텀이 절반씩 차지)
+  if (coreOption) coreOption.style.display = hasCore ? "" : "none";
+  // core가 없으면 모드 선택을 2칸 그리드로 (전체/커스텀이 절반씩 차지)
   const modeSelect = document.querySelector('.mode-select');
-  if (modeSelect) modeSelect.classList.toggle("two-cols", isBusan);
-  if (isBusan && State.mode === "core") {
+  if (modeSelect) modeSelect.classList.toggle("two-cols", !hasCore);
+  if (!hasCore && State.mode === "core") {
     State.mode = "all";
     const allRadio = document.querySelector('input[name="mode"][value="all"]');
     if (allRadio) allRadio.checked = true;
@@ -804,7 +804,7 @@ document.addEventListener("DOMContentLoaded", () => {
   buildCustomPicker();
   goHome();
 
-  // 지역 선택 (수도권 / 부산)
+  // 지역 선택
   document.querySelectorAll(".region-btn").forEach(btn =>
     btn.addEventListener("click", () => selectRegion(btn.dataset.region)));
 

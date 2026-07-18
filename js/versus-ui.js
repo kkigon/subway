@@ -174,13 +174,14 @@
     });
   }
 
-  // 지역에 맞춰 노선 세그먼트(1~9호선 표시 여부)와 커스텀 picker 갱신
+  // 지역에 맞춰 노선 세그먼트(core 표시 여부)와 커스텀 picker 갱신
   function syncRegionUI() {
-    // 부산은 1~9호선(core)이 없으므로 그 버튼 숨기고, core면 all로 보정
+    const regionLines = LINES.filter(l => (l.region || "seoul") === vsSettings.region);
+    const hasCore = regionLines.some(line => line.core);
     const modeBox = $("#vs-set-mode");
     const coreBtn = modeBox && modeBox.querySelector('[data-mode="core"]');
-    if (coreBtn) coreBtn.style.display = (vsSettings.region === "busan") ? "none" : "";
-    if (vsSettings.region === "busan" && vsSettings.mode === "core") {
+    if (coreBtn) coreBtn.style.display = hasCore ? "" : "none";
+    if (!hasCore && vsSettings.mode === "core") {
       vsSettings.mode = "all";
       modeBox.querySelectorAll(".vs-seg-btn").forEach(b => b.classList.toggle("active", b.dataset.mode === "all"));
     }

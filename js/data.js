@@ -15,6 +15,15 @@ const DISPLAY_NAME = {
   "총신대입구": "총신대입구(이수)",
 };
 
+// 지역 코드는 게임 기록·대전 방 설정에서도 공통으로 사용한다.
+const REGION_LABELS = {
+  seoul: "수도권",
+  busan: "부산",
+  daegu: "대구",
+  daejeon: "대전",
+  gwangju: "광주",
+};
+
 const LINES = [
   {
     id: "L1", name: "1호선", badge: "1", color: "#0052A4", core: true, region: "seoul",

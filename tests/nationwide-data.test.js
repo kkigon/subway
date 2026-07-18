@@ -1,0 +1,51 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
+
+const root = path.join(__dirname, "..");
+const sources = ["js/data.js", "js/data-busan.js", "js/data-nationwide.js", "js/layout.js"]
+  .map(file => fs.readFileSync(path.join(root, file), "utf8"))
+  .join("\n");
+const sandbox = {};
+vm.createContext(sandbox);
+vm.runInContext(`${sources}\nthis.snapshot = { LINES, ANCHORS, DISPLAY_NAME, REGION_LABELS, buildNetwork };`, sandbox);
+
+const { LINES, ANCHORS, DISPLAY_NAME, REGION_LABELS, buildNetwork } = sandbox.snapshot;
+assert.deepEqual(Object.keys(REGION_LABELS), ["seoul", "busan", "daegu", "daejeon", "gwangju"]);
+
+const expectedLines = {
+  busan: ["BS1", "BS2", "BS3", "BS4", "BSDH", "BSGH"],
+  daegu: ["DG1", "DG2", "DG3", "DGK"],
+  daejeon: ["DJ1"],
+  gwangju: ["GJ1"],
+};
+for (const [region, ids] of Object.entries(expectedLines)) {
+  assert.deepEqual(Array.from(LINES.filter(line => line.region === region), line => line.id), ids);
+  const network = buildNetwork(ids);
+  assert.ok(network.stations.size > 0, `${region} 노선도가 비어 있지 않아야 한다`);
+  for (const station of network.stations.values()) {
+    assert.ok(Number.isFinite(station.x) && Number.isFinite(station.y), `${station.name} 좌표가 유효해야 한다`);
+  }
+}
+
+const expectedStationCounts = { DG1: 35, DG2: 29, DG3: 30, DGK: 7, DJ1: 22, GJ1: 20 };
+for (const [id, count] of Object.entries(expectedStationCounts)) {
+  const line = LINES.find(candidate => candidate.id === id);
+  assert.ok(line, `${id} 노선이 있어야 한다`);
+  assert.equal(new Set(line.segments.flat()).size, count, `${id} 역 수`);
+  assert.ok(line.segments.flat().every(key => DISPLAY_NAME[key]), `${id} 표시명이 모두 있어야 한다`);
+  assert.ok(line.segments.some(segment => segment.filter(key => ANCHORS[key]).length >= 2), `${id}에 앵커가 2개 이상 있어야 한다`);
+}
+
+assert.equal(DISPLAY_NAME["DG:하양(대구가톨릭대)"], "하양(대구가톨릭대)");
+assert.equal(DISPLAY_NAME["GJ:학동·증심사입구"], "학동·증심사입구");
+assert.equal(DISPLAY_NAME["GJ:문화전당(구도청)"], "문화전당(구도청)");
+
+const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+for (const region of Object.keys(REGION_LABELS)) {
+  assert.ok(html.includes(`class="region-btn${region === "seoul" ? " active" : ""}" data-region="${region}"`));
+  assert.ok(html.includes(`class="rank-region-tab${region === "seoul" ? " active" : ""}" type="button" data-region="${region}"`));
+}
+assert.ok(html.includes('<script src="js/data-nationwide.js"></script>'));
+console.log("nationwide data tests: ok");

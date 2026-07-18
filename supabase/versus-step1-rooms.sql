@@ -11,7 +11,7 @@ create table if not exists public.rooms (
   code         text primary key,                 -- 방 코드 (예: 'K7Q2M9') — 사람이 입력/공유
   host_id      text,                              -- 대전 세션 id(로그인/게스트 공통, 탭별 고유값)
   host_name    text not null,                     -- 방장 표시 이름 (닉네임 또는 'Guest #1234')
-  region       text not null default 'seoul',     -- 'seoul' | 'busan'
+  region       text not null default 'seoul',     -- seoul | busan | daegu | daejeon | gwangju
   mode         text not null default 'all',       -- 'core' | 'all' | 'custom'
   custom_lines text,                              -- 커스텀일 때 노선 id들(콤마구분), 아니면 null
   duration_sec integer not null default 90,       -- 한 게임 제한시간(초)

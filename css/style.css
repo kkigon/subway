@@ -739,13 +739,13 @@ body.modal-open { overflow: hidden; }
 }
 
 /* ============================================================
-   지역 선택 (수도권 / 부산) — 홈 화면 & 랭킹 모달
+   지역 선택 — 홈 화면 & 랭킹 모달
    ============================================================ */
 .region-select {
-  display: flex; gap: 8px; margin-bottom: 12px;
+  display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
 }
 .region-btn {
-  flex: 1; font: inherit; font-size: 15px; font-weight: 800;
+  flex: 1 1 72px; font: inherit; font-size: 15px; font-weight: 800;
   background: #f3f4f7; color: var(--ink-soft);
   border: 2px solid transparent; border-radius: 14px;
   padding: 11px; cursor: pointer;
@@ -758,9 +758,9 @@ body.modal-open { overflow: hidden; }
 }
 
 /* 랭킹 모달 지역 탭 */
-.rank-region-tabs { display: flex; gap: 8px; margin-bottom: 8px; }
+.rank-region-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 .rank-region-tab {
-  flex: 1; font: inherit; font-size: 14px; font-weight: 800;
+  flex: 1 1 72px; font: inherit; font-size: 14px; font-weight: 800;
   background: transparent; color: var(--ink-soft);
   border: 2px solid #e7e9ee; border-radius: 999px;
   padding: 8px; cursor: pointer; transition: all .2s;

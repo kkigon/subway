@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>지하철 게임 — 60초 역이름 맞추기</title>
-  <meta name="description" content="수도권 지하철 노선도를 보고 60초 안에 역 이름을 맞추는 게임">
+  <meta name="description" content="전국 지하철 노선도를 보고 60초 안에 역 이름을 맞추는 게임">
   <!-- 파비콘 (탭 아이콘) -->
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
@@ -84,6 +84,9 @@
       <div class="region-select" role="group" aria-label="지역 선택">
         <button type="button" class="region-btn active" data-region="seoul">수도권</button>
         <button type="button" class="region-btn" data-region="busan">부산</button>
+        <button type="button" class="region-btn" data-region="daegu">대구</button>
+        <button type="button" class="region-btn" data-region="daejeon">대전</button>
+        <button type="button" class="region-btn" data-region="gwangju">광주</button>
       </div>
 
       <fieldset class="mode-select">
@@ -224,6 +227,9 @@
           <div class="vs-seg" id="vs-set-region">
             <button type="button" class="vs-seg-btn active" data-region="seoul">수도권</button>
             <button type="button" class="vs-seg-btn" data-region="busan">부산</button>
+            <button type="button" class="vs-seg-btn" data-region="daegu">대구</button>
+            <button type="button" class="vs-seg-btn" data-region="daejeon">대전</button>
+            <button type="button" class="vs-seg-btn" data-region="gwangju">광주</button>
           </div>
         </div>
 
@@ -299,6 +305,9 @@
       <div class="rank-region-tabs">
         <button class="rank-region-tab active" type="button" data-region="seoul">수도권</button>
         <button class="rank-region-tab" type="button" data-region="busan">부산</button>
+        <button class="rank-region-tab" type="button" data-region="daegu">대구</button>
+        <button class="rank-region-tab" type="button" data-region="daejeon">대전</button>
+        <button class="rank-region-tab" type="button" data-region="gwangju">광주</button>
       </div>
       <div class="rank-tabs" id="rank-line-tabs">
         <button class="rank-tab active" type="button" data-mode="core">1~9호선</button>
@@ -366,6 +375,7 @@
 
   <script src="js/data.js"></script>
   <script src="js/data-busan.js"></script>
+  <script src="js/data-nationwide.js"></script>
   <script src="js/hangul.js"></script>
   <script src="js/layout.js"></script>
   <script src="js/map.js"></script>

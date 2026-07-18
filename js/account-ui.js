@@ -179,11 +179,19 @@
 
     // 최고점 요약 (지역+모드별)
     const best = await Account.myBest();
-    const bestLabel = {
-      "seoul:core": "수도권 1~9호선", "seoul:all": "수도권 전체", "seoul:custom": "수도권 커스텀",
-      "busan:all": "부산 전체", "busan:custom": "부산 커스텀",
-    };
-    const bestOrder = ["seoul:core", "seoul:all", "seoul:custom", "busan:all", "busan:custom"];
+    const bestLabel = {};
+    const bestOrder = [];
+    for (const [region, label] of Object.entries(REGION_LABELS)) {
+      const hasCore = LINES.some(line => (line.region || "seoul") === region && line.core);
+      if (hasCore) {
+        bestLabel[`${region}:core`] = `${label} 1~9호선`;
+        bestOrder.push(`${region}:core`);
+      }
+      for (const mode of ["all", "custom"]) {
+        bestLabel[`${region}:${mode}`] = `${label} ${mode === "all" ? "전체" : "커스텀"}`;
+        bestOrder.push(`${region}:${mode}`);
+      }
+    }
     $("#mypage-best").innerHTML = bestOrder
       .filter(k => best[k] !== undefined)
       .map(k => `<div class="best-card"><span class="best-mode">${bestLabel[k] || k}</span><span class="best-score">${best[k]}</span><span class="best-unit">역</span></div>`)
@@ -226,12 +234,10 @@
     document.querySelectorAll(".rank-region-tab").forEach(t =>
       t.classList.toggle("active", t.dataset.region === region));
 
-    // 부산은 'all' 한 가지만, 수도권은 core/all 둘 다
-    const isBusan = region === "busan";
+    const hasCore = LINES.some(line => (line.region || "seoul") === region && line.core);
     const coreTab = document.querySelector('.rank-tab[data-mode="core"]');
-    if (coreTab) coreTab.style.display = isBusan ? "none" : "";
-    // 부산이면 강제로 all 탭
-    if (isBusan) rankTab = "all";
+    if (coreTab) coreTab.style.display = hasCore ? "" : "none";
+    if (!hasCore) rankTab = "all";
     else if (rankTab !== "core" && rankTab !== "all") rankTab = "core";
     setRankTab(rankTab);
   }
