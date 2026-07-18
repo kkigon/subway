@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>지하철 게임 — 60초 역이름 맞추기</title>
-  <meta name="description" content="수도권 지하철 노선도를 보고 60초 안에 역 이름을 맞추는 게임">
+  <title>지하철 게임 — 역이름 맞추기</title>
+  <meta name="description" content="전국 지하철 노선도를 보고 제한 시간 안에 역 이름을 맞추는 게임">
   <!-- 파비콘 (탭 아이콘) -->
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <meta name="theme-color" content="#0052A4">
   <meta property="og:title" content="지하철 게임 🚇">
-  <meta property="og:description" content="60초 안에 지하철역 이름을 몇 개나 맞출 수 있을까?">
+  <meta property="og:description" content="제한 시간 안에 지하철역 이름을 몇 개나 맞출 수 있을까?">
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
   <link rel="stylesheet" href="css/style.css">
@@ -79,11 +79,15 @@
         <h1>지하철 게임</h1>
         <span class="title-dot"></span>
       </div>
-      <p class="tagline">노선도를 보고 60초 안에 역 이름을 맞추세요</p>
+      <p class="tagline">노선도를 보고 제한 시간 안에 역 이름을 맞추세요</p>
 
       <div class="region-select" role="group" aria-label="지역 선택">
         <button type="button" class="region-btn active" data-region="seoul">수도권</button>
         <button type="button" class="region-btn" data-region="busan">부산</button>
+        <button type="button" class="region-btn" data-region="daegu">대구</button>
+        <button type="button" class="region-btn" data-region="daejeon">대전</button>
+        <button type="button" class="region-btn" data-region="gwangju">광주</button>
+        <button type="button" class="region-btn" data-region="nationwide">전국</button>
       </div>
 
       <fieldset class="mode-select">
@@ -118,8 +122,8 @@
         <label class="play-mode-option">
           <input type="radio" name="playmode" value="timed" checked>
           <span class="play-mode-card">
-            <strong>⏱️ 1분 도전</strong>
-            <small>60초 동안 많이 맞히기</small>
+            <strong>⏱️ 시간 도전</strong>
+            <small>선택한 시간 동안 많이 맞히기</small>
           </span>
         </label>
         <label class="play-mode-option">
@@ -130,6 +134,18 @@
           </span>
         </label>
       </fieldset>
+
+      <div id="game-duration-setting" class="game-duration-setting">
+        <span class="game-duration-label">제한 시간</span>
+        <div class="game-duration-options" role="group" aria-label="제한 시간 선택">
+          <button type="button" class="game-duration-btn" data-duration="10">10초</button>
+          <button type="button" class="game-duration-btn" data-duration="30">30초</button>
+          <button type="button" class="game-duration-btn active" data-duration="60">60초</button>
+          <button type="button" class="game-duration-btn" data-duration="120">120초</button>
+          <button type="button" class="game-duration-btn" data-duration="300">300초</button>
+        </div>
+        <small>역대 랭킹은 제한 시간별로 따로 집계돼요</small>
+      </div>
 
       <button id="btn-start" class="primary-btn" type="button">게임 시작</button>
       <button id="btn-versus" class="versus-btn" type="button">⚔️ 대전 모드</button>
@@ -223,7 +239,11 @@
           <span class="vs-setting-label">지역</span>
           <div class="vs-seg" id="vs-set-region">
             <button type="button" class="vs-seg-btn active" data-region="seoul">수도권</button>
+            <button type="button" class="vs-seg-btn" data-region="nationwide">전국</button>
             <button type="button" class="vs-seg-btn" data-region="busan">부산</button>
+            <button type="button" class="vs-seg-btn" data-region="daegu">대구</button>
+            <button type="button" class="vs-seg-btn" data-region="daejeon">대전</button>
+            <button type="button" class="vs-seg-btn" data-region="gwangju">광주</button>
           </div>
         </div>
 
@@ -241,9 +261,11 @@
         <div class="vs-setting-row">
           <span class="vs-setting-label">시간</span>
           <div class="vs-seg" id="vs-set-duration">
-            <button type="button" class="vs-seg-btn active" data-dur="60">1분</button>
-            <button type="button" class="vs-seg-btn" data-dur="180">3분</button>
-            <button type="button" class="vs-seg-btn" data-dur="300">5분</button>
+            <button type="button" class="vs-seg-btn" data-dur="10">10초</button>
+            <button type="button" class="vs-seg-btn" data-dur="30">30초</button>
+            <button type="button" class="vs-seg-btn active" data-dur="60">60초</button>
+            <button type="button" class="vs-seg-btn" data-dur="120">120초</button>
+            <button type="button" class="vs-seg-btn" data-dur="300">300초</button>
           </div>
         </div>
 
@@ -294,17 +316,27 @@
   <div id="ranking-modal" class="modal-backdrop">
     <div class="modal-card">
       <button class="modal-x" type="button" data-close-modal="ranking-modal" aria-label="닫기">✕</button>
-      <h2 class="modal-title">🏆 주간 랭킹</h2>
-      <p id="ranking-reset" class="rank-reset"></p>
+      <h2 class="modal-title">🏆 역대 랭킹</h2>
       <div class="rank-region-tabs">
         <button class="rank-region-tab active" type="button" data-region="seoul">수도권</button>
         <button class="rank-region-tab" type="button" data-region="busan">부산</button>
+        <button class="rank-region-tab" type="button" data-region="daegu">대구</button>
+        <button class="rank-region-tab" type="button" data-region="daejeon">대전</button>
+        <button class="rank-region-tab" type="button" data-region="gwangju">광주</button>
+        <button class="rank-region-tab" type="button" data-region="nationwide">전국</button>
       </div>
       <div class="rank-tabs" id="rank-line-tabs">
         <button class="rank-tab active" type="button" data-mode="core">1~9호선</button>
         <button class="rank-tab" type="button" data-mode="all">전체 노선</button>
       </div>
-      <p class="rank-note">⏱️ 1분 도전 모드 기록만 집계돼요</p>
+      <div class="rank-duration-tabs" id="rank-duration-tabs" role="group" aria-label="랭킹 제한 시간">
+        <button class="rank-duration-tab" type="button" data-duration="10">10초</button>
+        <button class="rank-duration-tab" type="button" data-duration="30">30초</button>
+        <button class="rank-duration-tab active" type="button" data-duration="60">60초</button>
+        <button class="rank-duration-tab" type="button" data-duration="120">120초</button>
+        <button class="rank-duration-tab" type="button" data-duration="300">300초</button>
+      </div>
+      <p class="rank-note">⏱️ 제한 시간별 최고 기록 상위 100명을 집계해요</p>
       <div id="ranking-body" class="rank-body"></div>
     </div>
   </div>
@@ -329,10 +361,10 @@
       <label class="field-label">테마 노선</label>
       <div id="mypage-theme-grid" class="theme-grid"></div>
 
-      <label class="field-label">내 최고 기록(1분 모드)</label>
+      <label class="field-label">내 최고 기록(시간별)</label>
       <div id="mypage-best" class="best-row"></div>
 
-      <label class="field-label">플레이 기록 (1분 모드)</label>
+      <label class="field-label">플레이 기록</label>
       <div id="mypage-plays" class="plays-list"></div>
 
       <div class="modal-actions">
@@ -366,6 +398,8 @@
 
   <script src="js/data.js"></script>
   <script src="js/data-busan.js"></script>
+  <script src="js/data-nationwide.js"></script>
+  <script src="js/scoring.js"></script>
   <script src="js/hangul.js"></script>
   <script src="js/layout.js"></script>
   <script src="js/map.js"></script>

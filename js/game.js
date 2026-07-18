@@ -2,17 +2,18 @@
    지하철 게임 — 메인 게임 로직
    ============================================================ */
 
-const GAME_SECONDS = 60;
+const DEFAULT_GAME_SECONDS = 60;
 const HINTS_PER_GAME = 3;
-const REVEAL_DELAY = 950; // 정답 공개 후 다음 문제로 넘어가는 시간(ms)
+const REVEAL_DELAY = 500; // 정답 공개 후 다음 문제로 넘어가는 시간(ms)
 const SUGGEST_LIMIT = 50; // 자동완성에 한 번에 보여줄 최대 추천 개수 (이 이상은 스크롤)
 
 const $ = sel => document.querySelector(sel);
 
 const State = {
-  region: "seoul",       // seoul(수도권) | busan(부산)
+  region: "seoul",       // REGION_LABELS의 지역 코드
   mode: "core",          // core | all | custom (노선 범위)
-  playMode: "timed",     // timed(1분 도전) | endless(연속 모드)
+  playMode: "timed",     // timed(시간 도전) | endless(연속 모드)
+  gameDuration: DEFAULT_GAME_SECONDS,
   customLines: new Set(),
   playing: false,
   studying: false,       // 공부 모드 여부
@@ -73,14 +74,21 @@ const Sound = (() => {
 /* ---------------- 모드 / 지역 ---------------- */
 // 현재 지역에 속한 노선 목록
 function regionLines() {
-  return LINES.filter(l => (l.region || "seoul") === State.region);
+  return linesForRegion(State.region);
 }
 function regionLineIds() {
   return regionLines().map(l => l.id);
 }
 
+function regionMapOptions(displayLineIds = regionLineIds()) {
+  return {
+    displayLineIds,
+    regionLayout: State.region === "nationwide" ? "nationwide" : null,
+  };
+}
+
 function selectedLineIds() {
-  // 부산은 core(1~9호선) 모드가 없으므로 all과 동일 처리
+  // core 노선이 없는 지역은 all과 동일 처리
   if (State.mode === "core") {
     const core = regionLines().filter(l => l.core).map(l => l.id);
     return core.length ? core : regionLineIds();
@@ -121,7 +129,7 @@ function startGame() {
   const ids = selectedLineIds();
   if (ids.length === 0) return;
 
-  State.network = buildNetwork(ids, {displayLineIds: regionLineIds()});
+  State.network = buildNetwork(ids, regionMapOptions());
   SubwayMap.render(State.network);
 
   State.pool = shuffle([...State.network.quizStations.keys()]);
@@ -144,7 +152,7 @@ function startGame() {
   setTimeout(() => {
     nextQuestion();
     if (State.playMode === "timed") {
-      State.endAt = performance.now() + GAME_SECONDS * 1000;
+      State.endAt = performance.now() + State.gameDuration * 1000;
       tickTimer();
     } else {
       // 연속 모드: 시간 제한 없음
@@ -165,7 +173,7 @@ function shuffle(arr) {
 
 /* ---------------- 대전 모드 게임 시작 ----------------
    config = {
-     region: 'seoul'|'busan',
+     region: REGION_LABELS의 지역 코드,
      lineIds: [...],          // 출제 대상 노선 id
      playMode: 'timed'|'endless',
      duration: 60,            // 초 (timed일 때)
@@ -180,7 +188,7 @@ function startVersusGame(config) {
   State.versus = true;
   State.versusDuration = config.duration || 60;
 
-  State.network = buildNetwork(config.lineIds, { displayLineIds: regionLineIds() });
+  State.network = buildNetwork(config.lineIds, regionMapOptions());
   SubwayMap.render(State.network);
 
   const validKeys = new Set(State.network.quizStations.keys());
@@ -637,6 +645,12 @@ function endGame() {
       mode: State.mode,
       modeLabel: modeLabel(),
       playMode: State.playMode,
+      duration: State.gameDuration,
+      theoreticalMax: theoreticalMaxScore(
+        State.gameDuration,
+        State.network?.quizStations?.size || 1,
+        REVEAL_DELAY
+      ),
     });
   }
 }
@@ -659,7 +673,7 @@ function scoreMessage(score) {
 
 // 지역 이름
 function regionLabel() {
-  return State.region === "busan" ? "부산" : "수도권";
+  return REGION_LABELS[State.region] || State.region;
 }
 
 // 현재 게임 모드를 사람이 읽을 수 있는 문구로 (지역 포함)
@@ -679,7 +693,7 @@ function shareText() {
   if (State.playMode === "endless") {
     return `🚇 지하철 게임 — ${modeLabel()} · 연속 모드에서 ${State.score}개 역을 맞췄어요! 당신도 도전해보세요!`;
   }
-  return `🚇 지하철 게임 — ${modeLabel()}에서 60초 동안 ${State.score}개 역을 맞췄어요! 당신도 도전해보세요!`;
+  return `🚇 지하철 게임 — ${modeLabel()}에서 ${State.gameDuration}초 동안 ${State.score}개 역을 맞췄어요! 당신도 도전해보세요!`;
 }
 
 async function doShare(kind) {
@@ -733,7 +747,7 @@ function goHome() {
   SubwayMap.setInteractive(false);
   SubwayMap.hideFocus();
   // 홈 배경용 전체 노선도
-  State.network = buildNetwork(regionLineIds(), {displayLineIds: regionLineIds()});
+  State.network = buildNetwork(regionLineIds(), regionMapOptions());
   SubwayMap.render(State.network);
 }
 
@@ -744,7 +758,7 @@ function startStudy() {
   cancelAnimationFrame(State.timerFrame);
 
   // 전체 노선 + 모든 역을 표시
-  State.network = buildNetwork(regionLineIds(), { displayLineIds: regionLineIds() });
+  State.network = buildNetwork(regionLineIds(), regionMapOptions());
   SubwayMap.render(State.network);
 
   document.body.classList.remove("at-home", "at-end", "in-game");
@@ -776,14 +790,14 @@ function selectRegion(region) {
   document.querySelectorAll(".region-btn").forEach(b =>
     b.classList.toggle("active", b.dataset.region === region));
 
-  // 부산은 1~9호선(core) 모드가 없음 → core 카드 숨기고, core 선택중이었으면 all로
-  const isBusan = region === "busan";
+  // core 노선이 없는 비수도권 지역은 전체/커스텀만 제공한다.
+  const hasCore = regionSupportsCore(region);
   const coreOption = document.querySelector('.mode-option.core-only');
-  if (coreOption) coreOption.style.display = isBusan ? "none" : "";
-  // 부산이면 모드 선택을 2칸 그리드로 (전체/커스텀이 절반씩 차지)
+  if (coreOption) coreOption.style.display = hasCore ? "" : "none";
+  // core가 없으면 모드 선택을 2칸 그리드로 (전체/커스텀이 절반씩 차지)
   const modeSelect = document.querySelector('.mode-select');
-  if (modeSelect) modeSelect.classList.toggle("two-cols", isBusan);
-  if (isBusan && State.mode === "core") {
+  if (modeSelect) modeSelect.classList.toggle("two-cols", !hasCore);
+  if (!hasCore && State.mode === "core") {
     State.mode = "all";
     const allRadio = document.querySelector('input[name="mode"][value="all"]');
     if (allRadio) allRadio.checked = true;
@@ -795,7 +809,7 @@ function selectRegion(region) {
   updateStartButton();
 
   // 배경 노선도를 현재 지역으로 전환 (홈 화면일 때만 즉시 반영)
-  State.network = buildNetwork(regionLineIds(), { displayLineIds: regionLineIds() });
+  State.network = buildNetwork(regionLineIds(), regionMapOptions());
   SubwayMap.render(State.network);
 }
 
@@ -804,7 +818,7 @@ document.addEventListener("DOMContentLoaded", () => {
   buildCustomPicker();
   goHome();
 
-  // 지역 선택 (수도권 / 부산)
+  // 지역 선택
   document.querySelectorAll(".region-btn").forEach(btn =>
     btn.addEventListener("click", () => selectRegion(btn.dataset.region)));
 
@@ -816,9 +830,19 @@ document.addEventListener("DOMContentLoaded", () => {
       updateStartButton();
     });
   });
-  // 플레이 모드 선택 (1분 도전 / 연속 모드)
+  // 플레이 모드 선택 (시간 도전 / 연속 모드)
   document.querySelectorAll('input[name="playmode"]').forEach(radio => {
-    radio.addEventListener("change", () => { State.playMode = radio.value; });
+    radio.addEventListener("change", () => {
+      State.playMode = radio.value;
+      $("#game-duration-setting")?.classList.toggle("hidden", State.playMode !== "timed");
+    });
+  });
+  document.querySelectorAll(".game-duration-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      State.gameDuration = parseInt(btn.dataset.duration, 10) || DEFAULT_GAME_SECONDS;
+      document.querySelectorAll(".game-duration-btn").forEach(candidate =>
+        candidate.classList.toggle("active", candidate === btn));
+    });
   });
   updateStartButton();
 
@@ -877,7 +901,7 @@ window.VersusGame = {
   buildOrder: buildVersusOrder,  // 방장이 호출: 문제 순서 생성
   applyState: applyVersusState,  // 방장 스냅샷 수신 → 화면 반영(자가치유)
   resolveLineIds(region, mode, customLines) {
-    const lines = LINES.filter(l => (l.region || "seoul") === region);
+    const lines = linesForRegion(region);
     if (mode === "core") {
       const core = lines.filter(l => l.core).map(l => l.id);
       return core.length ? core : lines.map(l => l.id);
