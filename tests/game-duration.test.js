@@ -15,6 +15,7 @@ assert.deepEqual(singlePlayer, expected, "싱글플레이 시간 옵션");
 assert.deepEqual(versus, expected, "대전 모드 시간 옵션");
 assert.match(game, /State\.gameDuration \* 1000/);
 assert.match(game, /duration: State\.gameDuration/);
+assert.match(game, /const REVEAL_DELAY = 500/);
 assert.doesNotMatch(accountUi, /if \(duration !== 60\) return/);
 assert.match(accountUi, /Account\.weeklyRanking\(rankKey, rankDuration, 50\)/);
 

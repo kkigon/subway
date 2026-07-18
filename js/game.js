@@ -4,7 +4,7 @@
 
 const DEFAULT_GAME_SECONDS = 60;
 const HINTS_PER_GAME = 3;
-const REVEAL_DELAY = 950; // 정답 공개 후 다음 문제로 넘어가는 시간(ms)
+const REVEAL_DELAY = 500; // 정답 공개 후 다음 문제로 넘어가는 시간(ms)
 const SUGGEST_LIMIT = 50; // 자동완성에 한 번에 보여줄 최대 추천 개수 (이 이상은 스크롤)
 
 const $ = sel => document.querySelector(sel);
