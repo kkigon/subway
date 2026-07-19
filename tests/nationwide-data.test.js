@@ -45,6 +45,24 @@ for (const [id, count] of Object.entries(expectedStationCounts)) {
   assert.ok(line.segments.some(segment => segment.filter(key => ANCHORS[key]).length >= 2), `${id}에 앵커가 2개 이상 있어야 한다`);
 }
 
+// 대구 노선도는 공식 도식처럼 긴 수평축과 도심 환승 구간을 유지해야 한다.
+const daeguNetwork = buildNetwork(expectedLines.daegu);
+const daeguStation = name => daeguNetwork.stations.get(`DG:${name}`);
+assert.equal(daeguStation("문양").y, daeguStation("영남대").y, "대구 2호선 동서축은 수평이어야 한다");
+assert.equal(daeguStation("설화명곡").y, daeguStation("영대병원").y, "대구 1호선 서쪽 구간은 수평이어야 한다");
+assert.equal(daeguStation("동구청").y, daeguStation("하양(대구가톨릭대)").y, "대구 1호선 동쪽 구간은 수평이어야 한다");
+assert.ok(daeguStation("부호(경일대·호산대)").x - daeguStation("대구한의대병원").x >= 140,
+  "1호선 동쪽의 긴 역명이 서로 겹치지 않을 간격이어야 한다");
+assert.ok(daeguStation("하양(대구가톨릭대)").x - daeguStation("부호(경일대·호산대)").x >= 140,
+  "1호선 종점의 긴 역명이 서로 겹치지 않을 간격이어야 한다");
+assert.equal(daeguStation("구미").y, daeguStation("서대구").y, "대경선 서쪽 구간은 수평이어야 한다");
+assert.equal(daeguStation("동대구역").y, daeguStation("경산").y, "대경선 동쪽 구간은 수평이어야 한다");
+assert.ok(daeguStation("명덕").y < daeguStation("반월당").y, "1호선 도심 구간은 명덕에서 반월당 방향으로 내려가야 한다");
+assert.ok(daeguStation("반월당").y < daeguStation("대구역").y, "1호선 도심 구간은 반월당에서 대구역 방향으로 내려가야 한다");
+const daeguAspect = ((daeguNetwork.bounds.maxX - daeguNetwork.bounds.minX) + 160) /
+  ((daeguNetwork.bounds.maxY - daeguNetwork.bounds.minY) + 160);
+assert.ok(daeguAspect < 1.8, "대구 노선도는 일반 데스크톱 화면에서 좌우가 잘리지 않는 비율이어야 한다");
+
 assert.equal(DISPLAY_NAME["DG:하양(대구가톨릭대)"], "하양(대구가톨릭대)");
 assert.equal(DISPLAY_NAME["GJ:학동·증심사입구"], "학동·증심사입구");
 assert.equal(DISPLAY_NAME["GJ:문화전당(구도청)"], "문화전당(구도청)");
