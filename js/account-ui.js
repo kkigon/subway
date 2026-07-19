@@ -181,7 +181,7 @@
     const best = await Account.myBest();
     const bestLabel = {};
     const bestOrder = [];
-    const durations = [10, 30, 60, 120, 300];
+    const durations = [60, 120, 300];
     for (const [region, label] of Object.entries(REGION_LABELS)) {
       const hasCore = regionSupportsCore(region);
       if (hasCore) {
@@ -231,7 +231,7 @@
     openModal("#ranking-modal");
     // 게임에서 현재 선택한 지역으로 시작 (없으면 수도권)
     const cur = (typeof State !== "undefined" && State.region) ? State.region : "seoul";
-    const duration = (typeof State !== "undefined" && [10, 30, 60, 120, 300].includes(State.gameDuration))
+    const duration = (typeof State !== "undefined" && [60, 120, 300].includes(State.gameDuration))
       ? State.gameDuration : 60;
     setRankDuration(duration, false);
     setRankRegion(cur);

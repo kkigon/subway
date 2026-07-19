@@ -45,7 +45,11 @@ const Sound = (() => {
     wrong: new Audio("assets/sounds/wrong.mp3"),
   };
   let ctx = null;
+  function enabled() {
+    return typeof GameSettings === "undefined" || GameSettings.isSoundEnabled();
+  }
   function beep(freqs, dur = 0.12) {
+    if (!enabled()) return;
     try {
       ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
       freqs.forEach((f, i) => {
@@ -61,11 +65,22 @@ const Sound = (() => {
     } catch (e) { /* 무음 */ }
   }
   function play(name) {
+    if (!enabled()) return;
     const a = files[name];
     a.currentTime = 0;
     a.play().catch(() => {
       // mp3 파일이 아직 없으면 임시 효과음으로 대체
       name === "correct" ? beep([880, 1320]) : beep([220, 165], 0.16);
+    });
+  }
+  if (typeof GameSettings !== "undefined" && GameSettings.onSoundChange) {
+    GameSettings.onSoundChange(on => {
+      Object.values(files).forEach(audio => {
+        audio.muted = !on;
+        if (!on) { try { audio.pause(); audio.currentTime = 0; } catch (e) {} }
+      });
+      if (!on && ctx && ctx.state === "running") { try { ctx.suspend(); } catch (e) {} }
+      if (on && ctx && ctx.state === "suspended") { try { ctx.resume(); } catch (e) {} }
     });
   }
   return { play };

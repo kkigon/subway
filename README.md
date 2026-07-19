@@ -6,7 +6,7 @@
 
 - **지역 선택**: 수도권 / 전국 / 부산 / 대구 / 대전 / 광주
 - **모드 선택**: 수도권 1~9호선 모드 / 지역별 전체 모드 / 커스텀 모드(원하는 노선만 선택)
-- **시간 선택**: 10초 / 30초 / 60초 / 120초 / 300초 (역대 랭킹도 시간별로 분리 집계)
+- **시간 선택**: 60초 / 120초 / 300초 (역대 랭킹도 시간별로 분리 집계)
 - **보정 랭킹**: 분야별 상위 100명을 표시하며, 이론 최고 기록 대비 달성률을 제곱근 보정해 기록 70점 + 백분위 30점, 총 100점 만점
 - **성취 표시**: 1·2·3위, TOP 10, 상위 10% 순위 배지와 10점 구간별 점수 배지, 95점 이상 전용 효과
 - 카메라가 줌인된 역의 이름을 입력창에 타이핑해서 맞춥니다. 추천 목록을 클릭하거나 방향키+Enter로 선택할 수 있습니다.
@@ -27,7 +27,7 @@
 
 ## Supabase 적용 순서
 
-기존 서비스 DB에서는 먼저 Supabase SQL Editor로 `supabase/time-based-rankings.sql`을 실행한 뒤 프론트엔드를 배포합니다. 이 마이그레이션은 기존 `plays` 행을 삭제하지 않고 모두 60초 기록으로 보정하며, 새 시간 기록을 10/30/60/120/300초로 분리합니다. 랭킹은 날짜 제한 없는 역대 기록으로 집계됩니다.
+새 DB에서는 `supabase/time-based-rankings.sql`을 실행합니다. 기존 서비스 DB에서 10초·30초 모드를 제거할 때는 먼저 백업한 뒤 `supabase/remove-short-duration-modes.sql`을 실행합니다. 이 SQL은 10초·30초 `plays` 기록만 삭제하고 기존 60초·120초·300초 기록은 보존하며, `plays`, `rooms`, `game_states`의 허용 시간을 60/120/300초로 제한합니다. 랭킹은 날짜 제한 없는 역대 기록으로 집계됩니다.
 
 ## 대전 모드 서버 설정
 
@@ -36,7 +36,14 @@
 1. `js/supabase-config.js`에 Supabase의 현재 **Publishable key**를 설정합니다.
 2. 새 DB라면 `supabase/versus-step1-rooms.sql`을 먼저 실행합니다.
 3. `supabase/versus-multiplayer-authority.sql`을 Supabase SQL Editor에서 실행합니다.
-4. `supabase/time-based-rankings.sql`을 실행해 시간별 랭킹 마이그레이션을 적용합니다.
-5. Supabase Realtime에서 Presence/Broadcast 사용이 허용되어 있는지 확인합니다. `rooms`와 기존 `game_states` 테이블의 Postgres Changes publication 등록은 3번 SQL이 처리합니다.
+4. `supabase/versus-public-rooms-chat.sql`을 실행해 방 제목, 공개/비공개 목록, heartbeat, 채팅·신고 RPC와 RLS를 적용합니다.
+5. `supabase/time-based-rankings.sql`을 실행해 시간별 랭킹을 적용합니다. 기존 DB에서 10초·30초 기록까지 정리할 때는 대신 위의 `remove-short-duration-modes.sql`을 먼저 실행합니다.
+6. Supabase Realtime에서 Presence/Broadcast 사용이 허용되어 있는지 확인합니다. `rooms`와 기존 `game_states` 테이블의 Postgres Changes publication 등록은 3번 SQL이 처리합니다.
+
+기존 운영 DB의 권장 적용 순서는 `remove-short-duration-modes.sql` → `versus-multiplayer-authority.sql` → `versus-public-rooms-chat.sql`입니다. 그 뒤 프론트엔드를 배포합니다.
+
+공개방 목록에는 `waiting` 상태이면서 최근 90초 안에 방장 heartbeat가 확인된 방만 나타납니다. 비공개방은 직접 테이블 조회와 공개 목록에서 숨겨지고, 정확한 초대 코드를 `room_get` RPC에 전달한 경우에만 입장할 수 있습니다.
+
+채팅은 클라이언트와 서버 양쪽에서 욕설·과도한 반복·도배를 차단합니다. 각 사용자는 메시지당 한 번만 신고할 수 있고 서로 다른 사용자 3명의 신고가 누적되면 메시지가 자동으로 숨겨집니다. 로그인 사용자의 중복 신고 판정에는 클라이언트가 위조할 수 없는 Supabase Auth 사용자 ID를 사용하고, 게스트는 탭별 대전 세션 ID를 사용합니다. 운영자는 Supabase의 `room_messages`와 `room_message_reports` 테이블에서 신고 내역을 검토할 수 있습니다. 오래된 방·채팅을 자동 정리하려면 Supabase Cron에서 하루 한 번 `select public.cleanup_stale_versus_rooms();`를 실행하도록 등록합니다. 이 관리 함수는 브라우저 역할에는 공개되지 않습니다.
 
 참가자 온라인 상태는 Presence가 단일 진실이며, 방장·설정·게임 상태처럼 지속되어야 하는 값은 Postgres가 단일 진실입니다. 방장 변경은 클라이언트의 직접 테이블 수정이 아니라 원자적 RPC를 통해서만 이루어집니다.

@@ -1,7 +1,8 @@
 -- ============================================================
 -- 시간별 역대 랭킹 마이그레이션
 -- - 기존 플레이는 60초 기록으로 보존
--- - 10/30/60/120/300초 랭킹을 각각 분리 집계
+-- - 60/120/300초 랭킹을 각각 분리 집계
+-- - 폐지된 10/30초 기록은 삭제
 -- - 날짜 제한 없이 전체 기간의 최고 기록을 집계
 -- - 기록 70점 + 백분위 30점, 분야별 이론 최고점 100점
 -- - 여러 번 실행해도 안전
@@ -19,6 +20,9 @@ update public.plays
    set duration_sec = 60
  where duration_sec is null;
 
+delete from public.plays
+ where duration_sec in (10, 30);
+
 -- 기존 기록은 당시 950ms 전환 규칙의 시간상 최고치로 보정한다.
 -- 노선의 역 수가 더 적으면 실제 출제 가능한 역 수를 최고치로 사용한다.
 update public.plays
@@ -34,8 +38,6 @@ update public.plays
        else 2147483647
      end,
      case duration_sec
-       when 10 then 11
-       when 30 then 32
        when 60 then 64
        when 120 then 127
        when 300 then 316
@@ -50,17 +52,13 @@ alter table public.plays
   alter column theoretical_max set default 64,
   alter column theoretical_max set not null;
 
+alter table public.plays drop constraint if exists plays_duration_sec_check;
+alter table public.plays
+  add constraint plays_duration_sec_check
+  check (duration_sec in (60, 120, 300));
+
 do $$
 begin
-  if not exists (
-    select 1 from pg_constraint
-     where conname = 'plays_duration_sec_check'
-       and conrelid = 'public.plays'::regclass
-  ) then
-    alter table public.plays
-      add constraint plays_duration_sec_check
-      check (duration_sec in (10, 30, 60, 120, 300));
-  end if;
   if not exists (
     select 1 from pg_constraint
      where conname = 'plays_theoretical_max_check'
@@ -113,6 +111,7 @@ as $$
       from public.plays
      where plays.rank_mode = p_mode
        and plays.duration_sec = p_duration
+       and p_duration in (60, 120, 300)
      order by plays.user_id,
               (plays.score::numeric / plays.theoretical_max) desc,
               plays.score desc,

@@ -3,8 +3,8 @@
 --  사용법: Supabase 대시보드 → SQL Editor → New query
 --           → 이 파일 전체 붙여넣고 → Run
 -- ------------------------------------------------------------
---  이 단계에서는 "방 생성 / 코드로 입장"까지만 다룬다.
---  실시간 참가자/게임 동기화는 다음 단계에서 Realtime으로 추가.
+--  기본 테이블을 만든 뒤 versus-multiplayer-authority.sql,
+--  versus-public-rooms-chat.sql 순서로 이어서 적용한다.
 -- ============================================================
 
 create table if not exists public.rooms (
@@ -14,24 +14,32 @@ create table if not exists public.rooms (
   region       text not null default 'seoul',     -- seoul | nationwide | busan | daegu | daejeon | gwangju
   mode         text not null default 'all',       -- 'core' | 'all' | 'custom'
   custom_lines text,                              -- 커스텀일 때 노선 id들(콤마구분), 아니면 null
-  duration_sec integer not null default 90,       -- 한 게임 제한시간(초)
+  duration_sec integer not null default 60,       -- 60 | 120 | 300
   status       text not null default 'waiting',   -- 'waiting' | 'playing' | 'ended'
-  created_at   timestamptz not null default now()
+  room_title   text not null default '지하철 대전방',
+  is_public    boolean not null default true,
+  member_count integer not null default 1,
+  last_active_at timestamptz not null default now(),
+  created_at   timestamptz not null default now(),
+  constraint rooms_duration_sec_check check (duration_sec in (60, 120, 300)),
+  constraint rooms_title_length_check check (char_length(room_title) between 2 and 30),
+  constraint rooms_member_count_check check (member_count between 1 and 32)
 );
 
 -- 오래된 방 정리를 쉽게 하기 위한 인덱스 (생성시각)
 create index if not exists rooms_created_idx on public.rooms (created_at);
 
 -- ============================================================
---  RLS: 조회는 방 코드를 아는 누구나 가능하다.
+--  RLS: 공개방만 직접 조회할 수 있다.
 --  쓰기는 versus-multiplayer-authority.sql의 SECURITY DEFINER RPC만 허용한다.
 -- ============================================================
 alter table public.rooms enable row level security;
 
--- 누구나 방을 조회할 수 있음 (코드로 입장하려면 읽기가 필요)
+-- 공개방만 직접 조회할 수 있다. 비공개방은 후속 마이그레이션의 room_get RPC를 사용한다.
 drop policy if exists "rooms_select_all" on public.rooms;
-create policy "rooms_select_all" on public.rooms
-  for select using (true);
+drop policy if exists "rooms_select_public" on public.rooms;
+create policy "rooms_select_public" on public.rooms
+  for select using (is_public = true);
 
 -- 직접 쓰기 정책은 제거한다. 생성/설정/위임/삭제는 서버 권한 RPC가 검증한다.
 drop policy if exists "rooms_insert_all" on public.rooms;

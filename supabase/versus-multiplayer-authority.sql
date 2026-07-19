@@ -2,8 +2,8 @@
 -- 대전 모드: 서버 권위형 방장/방 설정 마이그레이션
 --
 -- 적용 순서
---   1. 기존 프로젝트라면 이 파일만 SQL Editor에서 실행
---   2. 새 프로젝트라면 versus-step1-rooms.sql 실행 후 이 파일 실행
+--   1. 새 프로젝트라면 versus-step1-rooms.sql 실행 후 이 파일 실행
+--   2. 공개방/채팅은 이어서 versus-public-rooms-chat.sql 실행
 --
 -- 온라인 참가자 목록은 Supabase Realtime Presence가 담당한다.
 -- 이 SQL은 영속 상태(방장, 설정, 방 상태)의 변경만 원자적 RPC로 제한한다.
@@ -20,6 +20,14 @@ alter table public.rooms add column if not exists play_mode text not null defaul
 alter table public.rooms add column if not exists host_revision bigint not null default 0;
 alter table public.rooms add column if not exists host_changed_at timestamptz not null default now();
 alter table public.rooms add column if not exists updated_at timestamptz not null default now();
+
+update public.rooms
+   set duration_sec = 60
+ where duration_sec not in (60, 120, 300);
+alter table public.rooms alter column duration_sec set default 60;
+alter table public.rooms drop constraint if exists rooms_duration_sec_check;
+alter table public.rooms add constraint rooms_duration_sec_check
+  check (duration_sec in (60, 120, 300));
 
 create or replace function public.room_create(
   p_code text,
@@ -52,7 +60,7 @@ begin
     code, host_id, host_name, region, mode, duration_sec, status,
     play_mode, host_revision, host_changed_at, updated_at
   ) values (
-    p_code, p_host, trim(p_host_name), p_region, 'all', 90, 'waiting',
+    p_code, p_host, trim(p_host_name), p_region, 'all', 60, 'waiting',
     'timed', 0, now(), now()
   )
   returning * into v_room;
@@ -81,7 +89,7 @@ begin
   if p_region not in ('seoul', 'nationwide', 'busan', 'daegu', 'daejeon', 'gwangju')
      or p_mode not in ('core', 'all', 'custom')
      or p_play_mode not in ('timed', 'endless')
-     or p_duration < 10 or p_duration > 600 then
+     or p_duration not in (60, 120, 300) then
     raise exception 'invalid room settings' using errcode = '22023';
   end if;
 

@@ -26,6 +26,11 @@
   <!-- 우측 상단 계정 영역 (로그인 버튼 / 닉네임 태그) -->
   <div id="account-area" class="account-area"></div>
 
+  <!-- 좌측 상단 설정 -->
+  <div class="home-settings-area">
+    <button id="btn-settings" class="settings-open-btn" type="button" aria-haspopup="dialog">⚙️ 설정</button>
+  </div>
+
   <!-- 인앱 브라우저(카카오톡 등) 안내 배너 -->
   <div id="inapp-banner" class="inapp-banner">
     <span id="inapp-banner-text" class="inapp-banner-text"></span>
@@ -138,8 +143,6 @@
       <div id="game-duration-setting" class="game-duration-setting">
         <span class="game-duration-label">제한 시간</span>
         <div class="game-duration-options" role="group" aria-label="제한 시간 선택">
-          <button type="button" class="game-duration-btn" data-duration="10">10초</button>
-          <button type="button" class="game-duration-btn" data-duration="30">30초</button>
           <button type="button" class="game-duration-btn active" data-duration="60">60초</button>
           <button type="button" class="game-duration-btn" data-duration="120">120초</button>
           <button type="button" class="game-duration-btn" data-duration="300">300초</button>
@@ -186,9 +189,9 @@
 
   <!-- ============ 대전 모드 화면들 ============ -->
 
-  <!-- 대전 진입: 만들기 / 입장 -->
+  <!-- 대전 진입: 만들기 / 공개방 / 초대 코드 입장 -->
   <div id="vs-entry-screen" class="overlay vs-screen">
-    <div class="overlay-card vs-card">
+    <div class="overlay-card vs-card vs-entry-card">
       <div class="title-plate small">
         <span class="title-dot"></span>
         <h1>⚔️ 대전 모드</h1>
@@ -196,7 +199,29 @@
       </div>
       <p class="tagline">친구와 실시간으로 역 이름 맞히기 대결!</p>
 
-      <button id="vs-create-btn" class="primary-btn" type="button">방 만들기</button>
+      <section class="vs-create-box" aria-labelledby="vs-create-label">
+        <p id="vs-create-label" class="field-label">새 방 만들기</p>
+        <input id="vs-room-title" class="field-input" type="text" maxlength="30"
+               placeholder="방 제목을 입력하세요" autocomplete="off">
+        <label class="vs-public-option">
+          <input id="vs-room-public" type="checkbox" checked>
+          <span><b>공개방</b><small>활성화된 방 목록에 표시돼요</small></span>
+        </label>
+        <button id="vs-create-btn" class="primary-btn" type="button">방 만들기</button>
+      </section>
+
+      <section class="vs-room-browser" aria-labelledby="vs-public-title">
+        <div class="vs-room-browser-head">
+          <div>
+            <p id="vs-public-title" class="field-label">지금 참여 가능한 공개방</p>
+            <small>대기 중인 활성 방만 표시돼요</small>
+          </div>
+          <button id="vs-room-refresh" class="vs-room-refresh" type="button" aria-label="공개방 새로고침">↻ 새로고침</button>
+        </div>
+        <div id="vs-public-rooms" class="vs-public-rooms" aria-live="polite">
+          <p class="muted">공개방을 불러오는 중…</p>
+        </div>
+      </section>
 
       <div class="vs-divider"><span>또는</span></div>
 
@@ -216,9 +241,14 @@
   <div id="vs-lobby-screen" class="overlay vs-screen">
     <div class="overlay-card vs-card">
       <div class="vs-lobby-head">
-        <span class="vs-role-badge" id="vs-lobby-role">방장</span>
+        <div class="vs-lobby-title-wrap">
+          <span class="vs-role-badge" id="vs-lobby-role">방장</span>
+          <span class="vs-visibility-badge" id="vs-lobby-visibility">공개</span>
+        </div>
         <span class="vs-myname">나: <b id="vs-my-name"></b></span>
       </div>
+
+      <h2 id="vs-lobby-title" class="vs-lobby-title">대전방</h2>
 
       <p class="vs-code-label">초대 코드</p>
       <div class="vs-code-big" id="vs-lobby-code">------</div>
@@ -261,8 +291,6 @@
         <div class="vs-setting-row">
           <span class="vs-setting-label">시간</span>
           <div class="vs-seg" id="vs-set-duration">
-            <button type="button" class="vs-seg-btn" data-dur="10">10초</button>
-            <button type="button" class="vs-seg-btn" data-dur="30">30초</button>
             <button type="button" class="vs-seg-btn active" data-dur="60">60초</button>
             <button type="button" class="vs-seg-btn" data-dur="120">120초</button>
             <button type="button" class="vs-seg-btn" data-dur="300">300초</button>
@@ -276,6 +304,27 @@
       <button class="ghost-btn vs-leave-btn" type="button">← 나가기</button>
     </div>
   </div>
+
+  <!-- 대전방 공용 채팅: 대기실·게임·결과 화면에서 계속 사용 -->
+  <button id="vs-chat-toggle" class="vs-chat-toggle" type="button" aria-controls="vs-chat-panel" aria-expanded="false">
+    💬 채팅 <span id="vs-chat-unread" class="vs-chat-unread" hidden>0</span>
+  </button>
+  <aside id="vs-chat-panel" class="vs-chat-panel" aria-label="대전방 채팅" aria-hidden="true">
+    <div class="vs-chat-head">
+      <div><b>방 채팅</b><small id="vs-chat-room-name"></small></div>
+      <button id="vs-chat-close" type="button" aria-label="채팅 닫기">✕</button>
+    </div>
+    <div id="vs-chat-messages" class="vs-chat-messages" aria-live="polite">
+      <p class="muted">아직 메시지가 없어요.</p>
+    </div>
+    <form id="vs-chat-form" class="vs-chat-form">
+      <input id="vs-chat-input" type="text" maxlength="200" autocomplete="off"
+             placeholder="메시지 입력 (최대 200자)" aria-label="채팅 메시지">
+      <button id="vs-chat-send" type="submit">전송</button>
+    </form>
+    <p id="vs-chat-msg" class="field-msg"></p>
+    <p class="vs-chat-policy">욕설·도배는 자동 차단되며, 신고가 누적된 메시지는 숨김 처리됩니다.</p>
+  </aside>
 
   <!-- 대전: 최종 순위 화면 -->
   <div id="vs-result-screen" class="overlay vs-screen">
@@ -330,14 +379,30 @@
         <button class="rank-tab" type="button" data-mode="all">전체 노선</button>
       </div>
       <div class="rank-duration-tabs" id="rank-duration-tabs" role="group" aria-label="랭킹 제한 시간">
-        <button class="rank-duration-tab" type="button" data-duration="10">10초</button>
-        <button class="rank-duration-tab" type="button" data-duration="30">30초</button>
         <button class="rank-duration-tab active" type="button" data-duration="60">60초</button>
         <button class="rank-duration-tab" type="button" data-duration="120">120초</button>
         <button class="rank-duration-tab" type="button" data-duration="300">300초</button>
       </div>
       <p class="rank-note">⏱️ 제한 시간별 최고 기록 상위 100명을 집계해요</p>
       <div id="ranking-body" class="rank-body"></div>
+    </div>
+  </div>
+
+  <!-- 설정 -->
+  <div id="settings-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="modal-card settings-card">
+      <button class="modal-x" id="settings-close" type="button" aria-label="닫기">✕</button>
+      <h2 id="settings-title" class="modal-title">⚙️ 설정</h2>
+      <div class="settings-row">
+        <div class="settings-copy">
+          <strong>게임 소리</strong>
+          <small>정답과 오답 효과음을 재생해요</small>
+        </div>
+        <button id="settings-sound-toggle" class="settings-toggle" type="button" role="switch" aria-checked="true">
+          <span class="settings-toggle-knob"></span>
+          <span id="settings-sound-status" class="settings-toggle-label">ON</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -403,6 +468,7 @@
   <script src="js/hangul.js"></script>
   <script src="js/layout.js"></script>
   <script src="js/map.js"></script>
+  <script src="js/settings.js"></script>
   <script src="js/game.js"></script>
 
   <!-- 백엔드(로그인/랭킹) — Supabase -->

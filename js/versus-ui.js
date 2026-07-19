@@ -11,8 +11,13 @@
   const $ = sel => document.querySelector(sel);
 
   function escapeHtml(s) {
-    return (s || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    return String(s || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
+
+  let publicRoomTimer = null;
+  let publicRoomRequest = 0;
+  let unreadChat = 0;
+  let lastChatMessageId = null;
 
   /* ---------- 화면 전환 ---------- */
   // 대전 관련 오버레이를 보여주고 홈/게임 오버레이는 숨긴다.
@@ -34,10 +39,25 @@
     }
     $("#vs-entry-error").textContent = "";
     $("#vs-code-input").value = "";
+    const title = $("#vs-room-title");
+    if (title && !title.value.trim()) {
+      title.value = `${Versus.resolveMyName()}님의 대전방`.slice(0, 30);
+      const initialTitle = title.value;
+      ensureAccountReady().then(() => {
+        if (title.value === initialTitle) title.value = `${Versus.resolveMyName()}님의 대전방`.slice(0, 30);
+      });
+    }
+    const publicToggle = $("#vs-room-public");
+    if (publicToggle) publicToggle.checked = true;
     showScreen("#vs-entry-screen");
+    startPublicRoomBrowser();
   }
 
   function closeVersus() {
+    stopPublicRoomBrowser();
+    if (settingsSaveTimer) { clearTimeout(settingsSaveTimer); settingsSaveTimer = null; }
+    closeChat();
+    document.body.classList.remove("vs-room-connected");
     showScreen(null);                 // 대전 오버레이 숨김 + in-versus 제거
     document.body.classList.remove("in-versus", "versus-mode");
     if (typeof State !== "undefined") State.versus = false;
@@ -76,7 +96,10 @@
     const btn = $("#vs-create-btn");
     btn.disabled = true; btn.textContent = "방 만드는 중…";
     await ensureAccountReady();   // 닉네임/프로필 로딩 완료 후 진행
-    const res = await Versus.createRoom();
+    const res = await Versus.createRoom({
+      title: $("#vs-room-title")?.value,
+      isPublic: $("#vs-room-public")?.checked !== false,
+    });
     btn.disabled = false; btn.textContent = "방 만들기";
     if (!res.ok) { $("#vs-entry-error").textContent = res.message || "방 생성 실패"; return; }
     setRoomUrl(res.code);
@@ -84,8 +107,8 @@
   }
 
   /* ---------- 코드로 입장 ---------- */
-  async function doJoin(codeFromUrl) {
-    const code = codeFromUrl || $("#vs-code-input").value;
+  async function doJoin(codeOverride, fromUrl = false) {
+    const code = codeOverride || $("#vs-code-input").value;
     const btn = $("#vs-join-btn");
     if (btn) { btn.disabled = true; btn.textContent = "입장 중…"; }
     await ensureAccountReady();   // 닉네임/프로필 로딩 완료 후 진행
@@ -95,11 +118,75 @@
       const errEl = $("#vs-entry-error");
       if (errEl) errEl.textContent = res.message || "입장 실패";
       // URL 자동입장 실패 시: URL의 room 파라미터를 지우고 진입화면 표시
-      if (codeFromUrl) { try { history.replaceState(null, "", location.pathname); } catch (e) {} showScreen("#vs-entry-screen"); }
+      if (fromUrl) { try { history.replaceState(null, "", location.pathname); } catch (e) {} showScreen("#vs-entry-screen"); startPublicRoomBrowser(); }
       return;
     }
     setRoomUrl(res.code);
     enterLobby();
+  }
+
+  function stopPublicRoomBrowser() {
+    if (publicRoomTimer) { clearInterval(publicRoomTimer); publicRoomTimer = null; }
+  }
+
+  function startPublicRoomBrowser() {
+    stopPublicRoomBrowser();
+    refreshPublicRooms();
+    publicRoomTimer = setInterval(refreshPublicRooms, 10000);
+  }
+
+  function roomModeLabel(room) {
+    if (room.mode === "core") return "1~9호선";
+    if (room.mode === "custom") return "커스텀";
+    return "전체 노선";
+  }
+
+  function renderPublicRooms(rooms) {
+    const box = $("#vs-public-rooms");
+    if (!box) return;
+    if (!rooms.length) {
+      box.innerHTML = `<p class="muted">지금 참여 가능한 공개방이 없어요.<br>새 방의 첫 방장이 되어보세요!</p>`;
+      return;
+    }
+    box.innerHTML = rooms.map(room => {
+      const region = (typeof REGION_LABELS !== "undefined" && REGION_LABELS[room.region]) || room.region;
+      return `<article class="vs-room-item">
+        <div class="vs-room-main">
+          <strong class="vs-room-title">${escapeHtml(room.room_title || "이름 없는 대전방")}</strong>
+          <div class="vs-room-meta">
+            <span>👑 ${escapeHtml(room.host_name)}</span>
+            <span>📍 ${escapeHtml(region)}</span>
+            <span>${escapeHtml(roomModeLabel(room))}</span>
+            <span>⏱ ${Number(room.duration_sec) || 60}초</span>
+            <span>👥 ${Math.max(1, Number(room.member_count) || 1)}명</span>
+          </div>
+        </div>
+        <button class="vs-room-join" type="button" data-room-code="${escapeHtml(room.code)}">참여</button>
+      </article>`;
+    }).join("");
+    box.querySelectorAll(".vs-room-join").forEach(button => {
+      button.addEventListener("click", async () => {
+        button.disabled = true; button.textContent = "입장 중";
+        await doJoin(button.dataset.roomCode);
+        if (button.isConnected) { button.disabled = false; button.textContent = "참여"; }
+      });
+    });
+  }
+
+  async function refreshPublicRooms() {
+    const box = $("#vs-public-rooms");
+    if (!box || !$("#vs-entry-screen")?.classList.contains("show")) return;
+    const request = ++publicRoomRequest;
+    const refresh = $("#vs-room-refresh");
+    if (refresh) refresh.disabled = true;
+    const result = await Versus.listPublicRooms(30);
+    if (refresh) refresh.disabled = false;
+    if (request !== publicRoomRequest) return;
+    if (!result.ok) {
+      box.innerHTML = `<p class="muted">공개방을 불러오지 못했어요.<br>${escapeHtml(result.message || "잠시 후 다시 시도해주세요.")}</p>`;
+      return;
+    }
+    renderPublicRooms(result.rooms);
   }
 
   /* ---------- 대기실 ---------- */
@@ -160,6 +247,36 @@
   // 방장 권한이 바뀌면 대기실의 역할 표시/설정 영역을 갱신
   /* ---------- 방장 게임 설정 ---------- */
   const vsSettings = { region: "seoul", mode: "core", customLines: [], duration: 60, playMode: "timed" };
+  let settingsSaveTimer = null;
+
+  function queueSettingsSave() {
+    if (!Versus.isHost() || !Versus.Room.code) return;
+    if (settingsSaveTimer) clearTimeout(settingsSaveTimer);
+    settingsSaveTimer = setTimeout(async () => {
+      settingsSaveTimer = null;
+      const result = await Versus.updateSettings({
+        region: vsSettings.region, mode: vsSettings.mode,
+        customLines: vsSettings.customLines, duration: vsSettings.duration,
+        playMode: "timed",
+      });
+      if (!result.ok) console.warn("[VersusUI] 방 설정 저장 실패", result.message || "unknown");
+    }, 250);
+  }
+
+  function syncSettingsFromRoom() {
+    const data = Versus.Room.data || {};
+    const allowedDurations = [60, 120, 300];
+    vsSettings.region = data.region || "seoul";
+    vsSettings.mode = ["core", "all", "custom"].includes(data.mode) ? data.mode : "all";
+    vsSettings.duration = allowedDurations.includes(Number(data.duration_sec)) ? Number(data.duration_sec) : 60;
+    vsSettings.customLines = String(data.custom_lines || "").split(",").filter(Boolean);
+    document.querySelectorAll("#vs-set-region .vs-seg-btn").forEach(button =>
+      button.classList.toggle("active", button.dataset.region === vsSettings.region));
+    document.querySelectorAll("#vs-set-mode .vs-seg-btn").forEach(button =>
+      button.classList.toggle("active", button.dataset.mode === vsSettings.mode));
+    document.querySelectorAll("#vs-set-duration .vs-seg-btn").forEach(button =>
+      button.classList.toggle("active", Number(button.dataset.dur) === vsSettings.duration));
+  }
 
   // 세그먼트 버튼(지역/노선/시간) 한 그룹 처리
   function wireSeg(containerSel, onPick) {
@@ -184,6 +301,7 @@
     if (!hasCore && vsSettings.mode === "core") {
       vsSettings.mode = "all";
       modeBox.querySelectorAll(".vs-seg-btn").forEach(b => b.classList.toggle("active", b.dataset.mode === "all"));
+      queueSettingsSave();
     }
     buildVsCustomPicker();
     updateCustomVisibility();
@@ -215,6 +333,7 @@
       input.addEventListener("change", () => {
         if (input.checked) { if (!vsSettings.customLines.includes(line.id)) vsSettings.customLines.push(line.id); }
         else { vsSettings.customLines = vsSettings.customLines.filter(id => id !== line.id); }
+        queueSettingsSave();
       });
       box.appendChild(label);
     }
@@ -224,9 +343,9 @@
   function wireSettingsOnce() {
     if (settingsWired) return;
     settingsWired = true;
-    wireSeg("#vs-set-region", (btn) => { vsSettings.region = btn.dataset.region; syncRegionUI(); });
-    wireSeg("#vs-set-mode", (btn) => { vsSettings.mode = btn.dataset.mode; updateCustomVisibility(); });
-    wireSeg("#vs-set-duration", (btn) => { vsSettings.duration = parseInt(btn.dataset.dur, 10) || 60; });
+    wireSeg("#vs-set-region", (btn) => { vsSettings.region = btn.dataset.region; syncRegionUI(); queueSettingsSave(); });
+    wireSeg("#vs-set-mode", (btn) => { vsSettings.mode = btn.dataset.mode; updateCustomVisibility(); queueSettingsSave(); });
+    wireSeg("#vs-set-duration", (btn) => { vsSettings.duration = parseInt(btn.dataset.dur, 10) || 60; queueSettingsSave(); });
     $("#vs-start-btn")?.addEventListener("click", doStartGame);
   }
 
@@ -254,6 +373,7 @@
     if (hostCtl) hostCtl.style.display = host ? "" : "none";
     const guestNote = $("#vs-guest-note");
     if (guestNote) guestNote.style.display = host ? "none" : "";
+    if (host) { syncSettingsFromRoom(); syncRegionUI(); }
     // 참가자 목록도 다시 그려 왕관/위임 버튼 노출을 갱신
     renderPlayers(Versus.getPlayers());
   }
@@ -329,8 +449,19 @@
 
   function enterLobby() {
     const R = Versus.Room;
+    stopPublicRoomBrowser();
+    document.body.classList.add("vs-room-connected");
     $("#vs-lobby-code").textContent = R.code;
     $("#vs-lobby-link").value = Versus.inviteLink(R.code);
+    const roomTitle = R.data?.room_title || `${R.data?.host_name || R.myName}님의 대전방`;
+    $("#vs-lobby-title").textContent = roomTitle;
+    $("#vs-chat-room-name").textContent = roomTitle;
+    const visibility = $("#vs-lobby-visibility");
+    if (visibility) {
+      const isPublic = R.data?.is_public !== false;
+      visibility.textContent = isPublic ? "공개" : "비공개";
+      visibility.classList.toggle("private", !isPublic);
+    }
 
     const host = Versus.isHost();
     $("#vs-lobby-role").textContent = host ? "방장" : "참가자";
@@ -342,10 +473,12 @@
 
     // 방장 설정 UI 준비
     wireSettingsOnce();
+    syncSettingsFromRoom();
     syncRegionUI();
 
     // 실시간 참가자 목록 렌더
     renderPlayers(Versus.getPlayers());
+    renderChat(Versus.getMessages());
 
     showScreen("#vs-lobby-screen");
   }
@@ -356,6 +489,9 @@
     if (location.search.includes("room=")) {
       try { history.replaceState(null, "", location.pathname); } catch (e) {}
     }
+    document.body.classList.remove("vs-room-connected");
+    closeChat();
+    lastChatMessageId = null;
     closeVersus();
   }
 
@@ -372,11 +508,105 @@
     setTimeout(() => { btn.textContent = orig; }, 1500);
   }
 
+  /* ---------- 대전방 채팅 ---------- */
+  function updateUnread() {
+    const badge = $("#vs-chat-unread");
+    if (!badge) return;
+    badge.hidden = unreadChat <= 0;
+    badge.textContent = unreadChat > 99 ? "99+" : String(unreadChat);
+  }
+
+  function openChat() {
+    if (!Versus.Room.code) return;
+    const panel = $("#vs-chat-panel");
+    panel?.classList.add("open");
+    panel?.setAttribute("aria-hidden", "false");
+    $("#vs-chat-toggle")?.setAttribute("aria-expanded", "true");
+    unreadChat = 0;
+    updateUnread();
+    renderChat(Versus.getMessages());
+    setTimeout(() => $("#vs-chat-input")?.focus(), 0);
+  }
+
+  function closeChat() {
+    const panel = $("#vs-chat-panel");
+    panel?.classList.remove("open");
+    panel?.setAttribute("aria-hidden", "true");
+    $("#vs-chat-toggle")?.setAttribute("aria-expanded", "false");
+  }
+
+  function formatChatTime(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  }
+
+  function renderChat(messages) {
+    const box = $("#vs-chat-messages");
+    if (!box) return;
+    const list = Array.isArray(messages) ? messages : [];
+    const newest = list.length ? String(list[list.length - 1].id) : null;
+    const panelOpen = $("#vs-chat-panel")?.classList.contains("open");
+    if (lastChatMessageId !== null && newest !== lastChatMessageId && !panelOpen) unreadChat += 1;
+    lastChatMessageId = newest;
+    updateUnread();
+    if (!list.length) {
+      box.innerHTML = `<p class="muted">아직 메시지가 없어요.<br>먼저 인사해보세요!</p>`;
+      return;
+    }
+    box.innerHTML = list.map(message => {
+      const mine = message.player_id === Versus.myId();
+      return `<div class="vs-chat-message${mine ? " mine" : ""}">
+        <div class="vs-chat-message-head">
+          <b>${escapeHtml(message.player_name || "참가자")}</b>
+          <time>${escapeHtml(formatChatTime(message.created_at))}</time>
+          ${mine ? "" : `<button class="vs-chat-report" type="button" data-message-id="${escapeHtml(message.id)}">신고</button>`}
+        </div>
+        <div class="vs-chat-bubble">${escapeHtml(message.body)}</div>
+      </div>`;
+    }).join("");
+    box.querySelectorAll(".vs-chat-report").forEach(button => {
+      button.addEventListener("click", () => reportMessage(button.dataset.messageId));
+    });
+    box.scrollTop = box.scrollHeight;
+  }
+
+  async function reportMessage(messageId) {
+    if (!confirm("이 메시지를 부적절한 내용으로 신고할까요?\n허위 신고는 삼가주세요.")) return;
+    const result = await Versus.reportChat(messageId, "부적절한 내용");
+    const msg = $("#vs-chat-msg");
+    if (msg) {
+      msg.textContent = result.ok ? "신고가 접수됐어요." : (result.message || "신고하지 못했어요.");
+      msg.className = `field-msg ${result.ok ? "ok" : "no"}`;
+    }
+  }
+
+  async function sendChat(event) {
+    event?.preventDefault();
+    const input = $("#vs-chat-input");
+    const button = $("#vs-chat-send");
+    const msg = $("#vs-chat-msg");
+    if (!input || !button) return;
+    button.disabled = true;
+    const result = await Versus.sendChat(input.value);
+    button.disabled = false;
+    if (result.ok) {
+      input.value = "";
+      if (msg) { msg.textContent = ""; msg.className = "field-msg"; }
+      input.focus();
+    } else if (msg) {
+      msg.textContent = result.message || "메시지를 보내지 못했어요.";
+      msg.className = "field-msg no";
+    }
+  }
+
   /* ---------- 초기화 ---------- */
   document.addEventListener("DOMContentLoaded", () => {
     $("#btn-versus")?.addEventListener("click", openEntry);
     $("#vs-create-btn")?.addEventListener("click", doCreate);
     $("#vs-join-btn")?.addEventListener("click", () => doJoin());
+    $("#vs-room-refresh")?.addEventListener("click", refreshPublicRooms);
+    $("#vs-room-title")?.addEventListener("keydown", event => { if (event.key === "Enter") doCreate(); });
 
     // pagehide에서 직접 퇴장시키지 않는다. bfcache나 모바일 앱 전환에도 발생해
     // 실제로는 접속 중인 참가자가 계속 나갔다 들어오는 현상을 만들 수 있다.
@@ -389,6 +619,7 @@
 
     // 참가자 목록이 실시간으로 바뀌면 다시 그림
     Versus.onPlayersChange(renderPlayers);
+    Versus.onChatChange(renderChat);
     // 방장 권한이 바뀌면 역할/설정 영역 갱신
     Versus.onHostChange(refreshRole);
     // 게임 시작 신호 → 모두 같은 설정/문제로 게임 화면 진입(카운트다운)
@@ -421,6 +652,9 @@
       e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
     });
     $("#vs-copy-link")?.addEventListener("click", copyLink);
+    $("#vs-chat-toggle")?.addEventListener("click", openChat);
+    $("#vs-chat-close")?.addEventListener("click", closeChat);
+    $("#vs-chat-form")?.addEventListener("submit", sendChat);
     document.querySelectorAll(".vs-leave-btn").forEach(b => b.addEventListener("click", doLeave));
     $("#vs-entry-back")?.addEventListener("click", closeVersus);
 
@@ -428,7 +662,7 @@
     const params = new URLSearchParams(location.search);
     const roomCode = params.get("room");
     if (roomCode) {
-      ensureAccountReady().then(() => doJoin(roomCode));
+      ensureAccountReady().then(() => doJoin(roomCode, true));
     }
   });
 

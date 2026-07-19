@@ -88,14 +88,51 @@ function makeClient(db, hub) {
       return chain;
     },
     async rpc(name, args) {
-      if (name === "room_create") {
+      if (name === "room_create_v2") {
         const row = {
           code: args.p_code, host_id: args.p_host, host_name: args.p_host_name,
-          host_revision: 0, region: args.p_region, mode: "all", duration_sec: 90,
-          play_mode: "timed", status: "waiting",
+          host_revision: 0, region: args.p_region, mode: "all", duration_sec: 60,
+          play_mode: "timed", status: "waiting", room_title: args.p_room_title,
+          is_public: args.p_is_public, member_count: 1,
         };
         db.rooms.set(row.code, row);
         return { data: { ...row }, error: null };
+      }
+      if (name === "room_get") {
+        return { data: db.rooms.get(args.p_code) || null, error: null };
+      }
+      if (name === "room_list_public") {
+        return {
+          data: [...db.rooms.values()].filter(room => room.is_public && room.status === "waiting"),
+          error: null,
+        };
+      }
+      if (name === "room_heartbeat") {
+        const current = db.rooms.get(args.p_room);
+        if (current?.host_id === args.p_host) current.member_count = args.p_member_count;
+        return { data: current ? { ...current } : null, error: null };
+      }
+      if (name === "room_chat_history") {
+        return { data: db.messages.filter(message => message.room_code === args.p_room && !message.is_hidden), error: null };
+      }
+      if (name === "room_send_message") {
+        const row = {
+          id: ++db.messageId, room_code: args.p_room, player_id: args.p_player,
+          player_name: args.p_player_name, body: args.p_body, report_count: 0,
+          is_hidden: false, created_at: new Date().toISOString(),
+        };
+        db.messages.push(row);
+        return { data: { ...row }, error: null };
+      }
+      if (name === "room_report_message") {
+        const message = db.messages.find(item => item.id === args.p_message && item.room_code === args.p_room);
+        if (!message || message.player_id === args.p_reporter) return { data: null, error: { code: "22023", message: "invalid report" } };
+        const key = `${args.p_message}:${args.p_reporter}`;
+        if (db.reports.has(key)) return { data: false, error: null };
+        db.reports.add(key);
+        message.report_count += 1;
+        if (message.report_count >= 3) message.is_hidden = true;
+        return { data: true, error: null };
       }
       if (name === "room_transfer_host") {
         if (this.failNextTransfer) {
@@ -163,15 +200,23 @@ async function flush() {
 }
 
 (async () => {
-  const db = { rooms: new Map() };
+  const db = { rooms: new Map(), messages: [], messageId: 0, reports: new Set() };
   const hub = new RealtimeHub();
   const first = makeBrowser(db, hub, "첫째");
   const second = makeBrowser(db, hub, "둘째");
 
   assert.notEqual(first.Versus.myId(), second.Versus.myId(), "탭마다 참가자 id가 달라야 한다");
 
-  const created = await first.Versus.createRoom();
+  const created = await first.Versus.createRoom({ title: "철도인 대전방", isPublic: true });
   assert.equal(created.ok, true);
+  assert.equal(db.rooms.get(created.code).duration_sec, 60);
+  assert.equal(db.rooms.get(created.code).room_title, "철도인 대전방");
+  assert.equal((await second.Versus.listPublicRooms()).rooms.length, 1);
+
+  const privateHost = makeBrowser(db, hub, "비공개방장");
+  assert.equal((await privateHost.Versus.createRoom({ title: "친구끼리 연습방", isPublic: false })).ok, true);
+  assert.equal((await second.Versus.listPublicRooms()).rooms.length, 1, "비공개방은 공개 목록에 없어야 한다");
+  await privateHost.Versus.leaveRoom();
   const joined = await second.Versus.joinRoom(created.code);
   assert.equal(joined.ok, true);
   await flush();
@@ -184,6 +229,17 @@ async function flush() {
   hub.emit(`room:${created.code}`, "presence", "sync", {});
   assert.equal(first.Versus.getPlayers().length, 2);
   assert.equal(second.Versus.getPlayers().length, 2);
+
+  // 채팅은 서버 저장 후 양쪽에 동기화되고, 클라이언트에서도 욕설을 먼저 차단한다.
+  assert.equal(first.Versus.validateChatText("반가워요!").ok, true);
+  assert.equal(first.Versus.validateChatText("씨 발").ok, false);
+  const chat = await first.Versus.sendChat("반가워요!");
+  assert.equal(chat.ok, true);
+  await flush();
+  assert.equal(first.Versus.getMessages().length, 1);
+  assert.equal(second.Versus.getMessages().length, 1);
+  const report = await second.Versus.reportChat(first.Versus.getMessages()[0].id, "부적절한 내용");
+  assert.equal(report.ok, true);
 
   const transfer = await first.Versus.transferHost(second.Versus.myId());
   assert.equal(transfer.ok, true);

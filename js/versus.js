@@ -19,6 +19,7 @@
 
 const Versus = (() => {
   const HOST_GRACE_MS = 10000;   // 방장이 사라진 뒤 승계까지 기다리는 유예
+  const GAME_DURATIONS = [60, 120, 300];
 
   const Room = {
     code: null,
@@ -30,16 +31,20 @@ const Versus = (() => {
     presenceReady: false,   // 최초 전체 sync 수신 여부(받기 전에는 방장 승계를 하지 않음)
     hostId: null,           // 단일 진실: 현재 방장(rooms.host_id)
     hostRevision: -1,       // 오래된 DB 이벤트가 최신 방장을 덮지 못하게 하는 단조 증가 버전
+    messages: [],           // 서버에 저장된 최근 채팅(신고 누적 숨김 제외)
     epoch: 0,               // 이전 방의 늦은 비동기 응답을 무시하기 위한 연결 세대
   };
 
   const playerListeners = [];
   const hostListeners = [];
   const backToLobbyListeners = [];
+  const chatListeners = [];
   function onPlayersChange(fn) { playerListeners.push(fn); }
   function onHostChange(fn) { hostListeners.push(fn); }
   function onBackToLobby(fn) { backToLobbyListeners.push(fn); }
+  function onChatChange(fn) { chatListeners.push(fn); }
   function notifyPlayers() { const list = withTyping(Room.players); playerListeners.forEach(fn => { try { fn(list); } catch (e) {} }); }
+  function notifyChat() { chatListeners.forEach(fn => { try { fn([...Room.messages]); } catch (e) {} }); }
   let lastNotifiedHost = undefined;
   function notifyHostIfChanged() {
     if (Room.hostId !== lastNotifiedHost) {
@@ -99,6 +104,29 @@ const Versus = (() => {
   }
   function inviteLink(code) { return location.href.split("#")[0].split("?")[0] + "?room=" + code; }
 
+  const BLOCKED_TEXT = /(시+발|씨+발|ㅅㅂ|병+신|ㅂㅅ|좆|존+나|개+새+끼|새+끼|지+랄|꺼+져|닥+쳐|니+애+미|느+금+마)/i;
+  function compactText(value) {
+    return String(value || "").normalize("NFKC").toLowerCase().replace(/[^0-9a-z가-힣ㄱ-ㅎㅏ-ㅣ]/g, "");
+  }
+  function hasBlockedTerms(value) { return BLOCKED_TEXT.test(compactText(value)); }
+  function validateRoomTitle(value) {
+    const title = String(value || "").trim().replace(/\s+/g, " ");
+    if (title.length < 2 || title.length > 30) return { ok: false, message: "방 제목은 2~30자로 입력해주세요." };
+    if (hasBlockedTerms(title)) return { ok: false, message: "방 제목에 사용할 수 없는 표현이 포함되어 있어요." };
+    if (/(.)\1{7,}/u.test(title)) return { ok: false, message: "같은 문자를 지나치게 반복할 수 없어요." };
+    return { ok: true, value: title };
+  }
+  function validateChatText(value) {
+    const body = String(value || "").trim().replace(/\s+/g, " ");
+    if (!body) return { ok: false, message: "메시지를 입력해주세요." };
+    if (body.length > 200) return { ok: false, message: "메시지는 200자까지 보낼 수 있어요." };
+    if (hasBlockedTerms(body)) return { ok: false, message: "욕설·비속어가 포함된 메시지는 보낼 수 없어요." };
+    if (/(.)\1{9,}/u.test(body)) return { ok: false, message: "같은 문자를 지나치게 반복할 수 없어요." };
+    const links = body.match(/https?:\/\//gi) || [];
+    if (links.length > 1) return { ok: false, message: "한 메시지에는 링크를 하나만 넣을 수 있어요." };
+    return { ok: true, value: body };
+  }
+
   /* ---------- 참가자 목록(Presence 전체 sync가 단일 진실) ---------- */
   // typing(입력중)은 가벼운 broadcast로만 주고받는다(DB에 쓰지 않음 → 깜빡임/부하 없음).
   const typingIds = {};   // { player_id: true }
@@ -155,7 +183,10 @@ const Versus = (() => {
 
     // 나간 사용자의 입력중 표시는 함께 정리한다.
     Object.keys(typingIds).forEach(id => { if (!byId.has(id)) delete typingIds[id]; });
-    if (changed) notifyPlayers();
+    if (changed) {
+      notifyPlayers();
+      heartbeatRoom();
+    }
     scheduleHostCheck();
   }
 
@@ -238,6 +269,7 @@ const Versus = (() => {
       Room.players = sortPlayers(Room.players);
       notifyHostIfChanged();
       notifyPlayers();
+      heartbeatRoom();
     }
     scheduleHostCheck();
     return true;
@@ -253,10 +285,11 @@ const Versus = (() => {
       const c = client();
       if (!c || !roomCode) return null;
       try {
-        const { data, error } = await c.from("rooms").select("*").eq("code", roomCode).maybeSingle();
+        const { data, error } = await c.rpc("room_get", { p_code: roomCode });
         if (error) throw error;
-        if (data && Room.code === roomCode && Room.epoch === epoch) applyRoomSnapshot(data);
-        return data || null;
+        const row = rpcRow(data);
+        if (row && Room.code === roomCode && Room.epoch === epoch) applyRoomSnapshot(row);
+        return row || null;
       } catch (e) {
         console.warn("[Versus] 방 상태 동기화 실패", e && e.message ? e.message : e);
         return null;
@@ -329,6 +362,10 @@ const Versus = (() => {
       if (payload.on) typingIds[payload.id] = true; else delete typingIds[payload.id];
       notifyPlayers();
     });
+    // 채팅 payload 자체는 신뢰하지 않고, 변경 알림을 받으면 서버 기록을 다시 읽는다.
+    channel.on("broadcast", { event: "chat_changed" }, () => {
+      if (Room.epoch === epoch && Room.code === roomCode) refreshChat();
+    });
 
     Room.channel = channel;
 
@@ -370,6 +407,7 @@ const Versus = (() => {
 
     startReconciler();
     await refreshRoom();
+    await refreshChat();
     await syncNow();
     ensureWatcher();
 
@@ -377,12 +415,121 @@ const Versus = (() => {
   }
 
   // Postgres Changes가 꺼져 있거나 일시적으로 끊겨도 DB 상태를 복구한다.
-  let reconcileTimer = null;
+  // 공개방 활성 여부와 인원 수는 현재 방장이 주기적으로 heartbeat로 갱신한다.
+  let reconcileTimer = null, heartbeatTimer = null, chatPollTimer = null;
   function startReconciler() {
     stopReconciler();
     reconcileTimer = setInterval(refreshRoom, 3000);
+    chatPollTimer = setInterval(refreshChat, 5000);
+    heartbeatRoom();
+    heartbeatTimer = setInterval(heartbeatRoom, 30000);
   }
-  function stopReconciler() { if (reconcileTimer) { clearInterval(reconcileTimer); reconcileTimer = null; } }
+  function stopReconciler() {
+    if (reconcileTimer) { clearInterval(reconcileTimer); reconcileTimer = null; }
+    if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+    if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
+  }
+
+  let heartbeatInFlight = false;
+  async function heartbeatRoom() {
+    if (heartbeatInFlight || !Room.code || !isHost()) return;
+    const c = client();
+    if (!c) return;
+    heartbeatInFlight = true;
+    try {
+      const { data, error } = await c.rpc("room_heartbeat", {
+        p_room: Room.code, p_host: myId(), p_member_count: Math.max(1, Room.players.length || 1),
+      });
+      if (!error) {
+        const row = rpcRow(data);
+        if (row) applyRoomSnapshot(row);
+      }
+    } catch (e) {}
+    heartbeatInFlight = false;
+  }
+
+  function sameMessages(a, b) {
+    if (a.length !== b.length) return false;
+    return a.every((message, index) => {
+      const other = b[index];
+      return other && String(message.id) === String(other.id)
+        && Number(message.report_count || 0) === Number(other.report_count || 0);
+    });
+  }
+
+  let chatInFlight = false;
+  async function refreshChat() {
+    if (chatInFlight || !Room.code) return Room.messages;
+    const c = client();
+    if (!c) return Room.messages;
+    chatInFlight = true;
+    const roomCode = Room.code;
+    const epoch = Room.epoch;
+    try {
+      const { data, error } = await c.rpc("room_chat_history", { p_room: roomCode, p_limit: 80 });
+      if (error) throw error;
+      if (Room.code === roomCode && Room.epoch === epoch) {
+        const next = (Array.isArray(data) ? data : (data ? [data] : []))
+          .filter(message => !message.is_hidden)
+          .sort((a, b) => Number(a.id) - Number(b.id));
+        if (!sameMessages(next, Room.messages)) {
+          Room.messages = next;
+          notifyChat();
+        }
+      }
+    } catch (e) {
+      console.warn("[Versus] 채팅 동기화 실패", e && e.message ? e.message : e);
+    }
+    chatInFlight = false;
+    return Room.messages;
+  }
+
+  function signalChatChanged() {
+    if (!Room.channel) return;
+    try { Room.channel.send({ type: "broadcast", event: "chat_changed", payload: {} }); } catch (e) {}
+  }
+
+  let lastChatSentAt = 0;
+  async function sendChat(value) {
+    if (!Room.code) return { ok: false, message: "먼저 방에 입장해주세요." };
+    const checked = validateChatText(value);
+    if (!checked.ok) return checked;
+    const now = Date.now();
+    if (now - lastChatSentAt < 1000) return { ok: false, message: "메시지를 너무 빠르게 보내고 있어요." };
+    const c = client();
+    if (!c) return { ok: false, message: "서버 연결이 필요해요." };
+    lastChatSentAt = now;
+    try {
+      const { error } = await c.rpc("room_send_message", {
+        p_room: Room.code, p_player: myId(), p_player_name: Room.myName, p_body: checked.value,
+      });
+      if (error) throw error;
+      await refreshChat();
+      signalChatChanged();
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, message: serverErrorMessage(e) };
+    }
+  }
+
+  async function reportChat(messageId, reason) {
+    if (!Room.code) return { ok: false, message: "방 연결이 끊어졌어요." };
+    const c = client();
+    if (!c) return { ok: false, message: "서버 연결이 필요해요." };
+    const cleanReason = String(reason || "부적절한 내용").trim().slice(0, 80);
+    try {
+      const { data, error } = await c.rpc("room_report_message", {
+        p_room: Room.code, p_message: Number(messageId), p_reporter: myId(), p_reason: cleanReason,
+      });
+      if (error) throw error;
+      if (data === false) return { ok: false, message: "이미 신고한 메시지예요." };
+      await refreshChat();
+      signalChatChanged();
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, message: serverErrorMessage(e) };
+    }
+  }
 
   async function retrack() {
     if (!Room.channel || !Room.code) return;
@@ -419,6 +566,7 @@ const Versus = (() => {
     Room.presenceReady = false;
     Room.hostId = null;
     Room.hostRevision = -1;
+    Room.messages = [];
     lastNotifiedHost = undefined;
     Object.keys(typingIds).forEach(id => delete typingIds[id]);
     myTyping = false;
@@ -427,18 +575,36 @@ const Versus = (() => {
     lastPushedRev = -1;
     inGame = false;
     startedSig = null;
+    lastChatSentAt = 0;
+    notifyChat();
   }
 
   /* ---------- 방 생성 ---------- */
-  async function createRoom() {
+  async function listPublicRooms(limit = 30) {
+    const c = client();
+    if (!c) return { ok: false, rooms: [], message: "서버 연결이 필요해요." };
+    try {
+      const { data, error } = await c.rpc("room_list_public", { p_limit: Math.max(1, Math.min(Number(limit) || 30, 50)) });
+      if (error) throw error;
+      return { ok: true, rooms: Array.isArray(data) ? data : [] };
+    } catch (e) {
+      return { ok: false, rooms: [], message: serverErrorMessage(e) };
+    }
+  }
+
+  async function createRoom(options = {}) {
     const c = client();
     if (!c) return { ok: false, message: "서버 연결이 필요해요. 잠시 후 다시 시도해주세요." };
     Room.myName = resolveMyName();
+    const titleResult = validateRoomTitle(options.title || `${Room.myName}님의 대전방`);
+    if (!titleResult.ok) return titleResult;
+    const isPublic = options.isPublic !== false;
     for (let attempt = 0; attempt < 5; attempt++) {
       const code = makeCode(6);
-      const { data, error } = await c.rpc("room_create", {
+      const { data, error } = await c.rpc("room_create_v2", {
         p_code: code, p_host: myId(), p_host_name: Room.myName,
         p_region: (typeof State !== "undefined" && State.region) ? State.region : "seoul",
+        p_room_title: titleResult.value, p_is_public: isPublic,
       });
       if (!error) {
         const row = rpcRow(data);
@@ -470,15 +636,16 @@ const Versus = (() => {
     code = (code || "").trim().toUpperCase();
     if (code.length < 4) return { ok: false, message: "코드를 정확히 입력해주세요." };
 
-    const { data, error } = await c.from("rooms").select("*").eq("code", code).maybeSingle();
+    const { data, error } = await c.rpc("room_get", { p_code: code });
     if (error) { console.warn("[Versus] 입장 조회 실패", error.message); return { ok: false, message: serverErrorMessage(error) }; }
-    if (!data) return { ok: false, message: "그런 방이 없어요. 코드를 다시 확인해주세요." };
-    if (data.status === "ended") return { ok: false, message: "이미 끝난 방이에요." };
+    const row = rpcRow(data);
+    if (!row) return { ok: false, message: "그런 방이 없어요. 코드를 다시 확인해주세요." };
+    if (row.status === "ended") return { ok: false, message: "이미 끝난 방이에요." };
 
     Room.code = code;
     Room.myName = resolveMyName();
     Room.hostRevision = -1;
-    applyRoomSnapshot(data);
+    applyRoomSnapshot(row);
     const connected = await connectChannel();
     if (!connected) {
       resetRoomState();
@@ -490,8 +657,19 @@ const Versus = (() => {
 
   function serverErrorMessage(error) {
     if (!error) return "서버 요청에 실패했어요.";
-    if (error.code === "PGRST202" || /room_(create|claim_host|transfer_host)/.test(error.message || "")) {
-      return "멀티플레이어 DB 업데이트가 필요해요. supabase/versus-multiplayer-authority.sql을 먼저 실행해주세요.";
+    if (error.code === "PGRST202" || /room_(create|create_v2|get|list_public|chat|send_message|report_message|heartbeat|claim_host|transfer_host)/.test(error.message || "")) {
+      return "멀티플레이어 DB 업데이트가 필요해요. README의 Supabase SQL 적용 순서를 확인해주세요.";
+    }
+    if (error.code === "22023") {
+      const message = error.message || "";
+      if (/blocked (chat|room title)|invalid chat/i.test(message)) return "사용할 수 없는 표현이 포함되어 있어요.";
+      if (/too many links/i.test(message)) return "한 메시지에는 링크를 하나만 넣을 수 있어요.";
+      if (/room not found|closed/i.test(message)) return "방이 종료되었거나 연결이 끊어졌어요.";
+      return message || "입력 내용을 확인해주세요.";
+    }
+    if (error.code === "P0001") {
+      if (/duplicate/i.test(error.message || "")) return "같은 메시지를 연속해서 보낼 수 없어요.";
+      return "메시지를 너무 빠르게 보내고 있어요. 잠시 후 다시 시도해주세요.";
     }
     if (error.code === "42501") return "방장 권한이 바뀌었어요. 방 상태를 다시 확인해주세요.";
     return error.message || "서버 요청에 실패했어요.";
@@ -510,7 +688,8 @@ const Versus = (() => {
         p_region: s.region !== undefined ? s.region : current.region,
         p_mode: s.mode !== undefined ? s.mode : current.mode,
         p_custom_lines: s.customLines !== undefined ? (s.customLines || []).join(",") : current.custom_lines,
-        p_duration: s.duration !== undefined ? s.duration : current.duration_sec,
+        p_duration: GAME_DURATIONS.includes(Number(s.duration !== undefined ? s.duration : current.duration_sec))
+          ? Number(s.duration !== undefined ? s.duration : current.duration_sec) : 60,
         p_play_mode: s.playMode !== undefined ? s.playMode : (current.play_mode || "timed"),
       });
       if (error) throw error;
@@ -747,7 +926,7 @@ const Versus = (() => {
     const region = settings.region || (Room.data && Room.data.region) || "seoul";
     const mode = settings.mode || "all";
     const customLines = settings.customLines || [];
-    const duration = settings.duration || 60;
+    const duration = GAME_DURATIONS.includes(Number(settings.duration)) ? Number(settings.duration) : 60;
 
     const lineIds = window.VersusGame.resolveLineIds(region, mode, customLines);
     if (!lineIds || lineIds.length === 0) return { ok: false, message: "노선을 선택해주세요." };
@@ -868,10 +1047,12 @@ const Versus = (() => {
   return {
     Room,
     makeCode, guestName, resolveMyName, myThemeLine, inviteLink, myId,
-    createRoom, joinRoom, leaveRoom, transferHost, quickLeave, retrack,
+    createRoom, listPublicRooms, joinRoom, leaveRoom, transferHost, quickLeave, retrack,
     updateSettings, startGame, onGameStart, onState, sendAnswer,
     setTyping, backToLobby, onBackToLobby, forceEnd,
+    validateRoomTitle, validateChatText, sendChat, reportChat, refreshChat, onChatChange,
     onPlayersChange, onHostChange, getPlayers: () => withTyping(Room.players),
+    getMessages: () => [...Room.messages],
     isHost, getHostId,
   };
 })();
