@@ -195,14 +195,20 @@ const Account = (() => {
 
   // 역대 랭킹 (지역+노선 범위+제한시간별)
   async function allTimeRanking(mode, duration, limit = 100) {
-    if (!client) return [];
+    if (!client) {
+      return { rows: [], error: "Supabase에 연결되지 않았습니다." };
+    }
     const { data, error } = await client.rpc("all_time_ranking_by_duration", {
       p_mode: mode,
       p_duration: duration,
       p_limit: limit,
     });
-    if (error) { console.warn("[Account] 랭킹 조회 실패", error.message); return []; }
-    return data || [];
+    if (error) {
+      const message = error.message || "알 수 없는 오류";
+      console.warn("[Account] 랭킹 조회 실패", message);
+      return { rows: [], error: message };
+    }
+    return { rows: data || [], error: null };
   }
 
   return {

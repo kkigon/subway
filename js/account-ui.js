@@ -226,6 +226,7 @@
   let rankRegion = "seoul";  // 랭킹에서 보고 있는 지역
   let rankTab = "core";      // 랭킹에서 보고 있는 노선 범위(core/all)
   let rankDuration = 60;      // 랭킹에서 보고 있는 제한 시간(초)
+  let rankLoadRevision = 0;   // 필터를 빠르게 바꿀 때 이전 응답이 화면을 덮지 않게 한다.
 
   async function openRanking() {
     openModal("#ranking-modal");
@@ -265,6 +266,7 @@
   }
 
   async function loadRanking() {
+    const loadRevision = ++rankLoadRevision;
     const body = $("#ranking-body");
     body.innerHTML = `<p class="muted">불러오는 중…</p>`;
     if (!Account.isConfigured()) {
@@ -273,7 +275,14 @@
     }
     // DB에는 region별 mode를 합쳐 "seoul:core" 같은 키로 저장한다.
     const rankKey = `${rankRegion}:${rankTab}`;
-    const rows = await Account.allTimeRanking(rankKey, rankDuration, 100);
+    const requestedDuration = rankDuration;
+    const result = await Account.allTimeRanking(rankKey, requestedDuration, 100);
+    if (loadRevision !== rankLoadRevision) return;
+    if (result.error) {
+      body.innerHTML = `<p class="muted">랭킹을 불러오지 못했어요. 잠시 후 다시 시도해주세요.</p>`;
+      return;
+    }
+    const rows = result.rows;
     const myId = Account.getProfile()?.id;
     if (rows.length === 0) {
       body.innerHTML = `<p class="muted">아직 기록이 없어요. 첫 주자가 되어보세요!</p>`;

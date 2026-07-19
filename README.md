@@ -7,7 +7,7 @@
 - **지역 선택**: 수도권 / 전국 / 부산 / 대구 / 대전 / 광주
 - **모드 선택**: 수도권 1~9호선 모드 / 지역별 전체 모드 / 커스텀 모드(원하는 노선만 선택)
 - **시간 선택**: 60초 / 120초 / 300초 (역대 랭킹도 시간별로 분리 집계)
-- **보정 랭킹**: 분야별 상위 100명을 표시하며, 이론 최고 기록 대비 달성률을 제곱근 보정해 기록 70점 + 백분위 30점, 총 100점 만점
+- **보정 랭킹**: 분야별 상위 100위를 표시하며, 서버가 현재 0.5초 전환 규칙과 노선별 역 수로 계산한 동일한 이론 최고 기록을 적용해 기록 70점 + 백분위 30점, 총 100점 만점
 - **성취 표시**: 1·2·3위, TOP 10, 상위 10% 순위 배지와 10점 구간별 점수 배지, 95점 이상 전용 효과
 - 카메라가 줌인된 역의 이름을 입력창에 타이핑해서 맞춥니다. 추천 목록을 클릭하거나 방향키+Enter로 선택할 수 있습니다.
 - **힌트 3개**: 힌트를 쓰면 해당 역 이름의 초성이 공개됩니다.
@@ -29,6 +29,8 @@
 
 새 DB에서는 `supabase/time-based-rankings.sql`을 실행합니다. 기존 서비스 DB에서 10초·30초 모드를 제거할 때는 먼저 백업한 뒤 `supabase/remove-short-duration-modes.sql`을 실행합니다. 이 SQL은 10초·30초 `plays` 기록만 삭제하고 기존 60초·120초·300초 기록은 보존하며, `plays`, `rooms`, `game_states`의 허용 시간을 60/120/300초로 제한합니다. 랭킹은 날짜 제한 없는 역대 기록으로 집계됩니다.
 
+이미 운영 중인 DB에서 저장된 플레이가 랭킹에서 누락되는 문제를 고칠 때는 `supabase/fix-ranking-eligibility.sql`을 실행합니다. 이 마이그레이션은 `plays`를 삭제하지 않으며, 비어 있거나 어긋난 지역·모드 키를 복구하고 구버전/현행 클라이언트의 이론 최고점 기준을 서버의 500ms 규칙으로 통일합니다. 프로필 행이 없는 기존 플레이도 `알 수 없는 사용자`로 집계하고 100위 경계의 동점자를 모두 반환합니다.
+
 ## 대전 모드 서버 설정
 
 대전 모드는 Supabase Realtime과 Postgres RPC를 사용합니다.
@@ -40,7 +42,7 @@
 5. `supabase/time-based-rankings.sql`을 실행해 시간별 랭킹을 적용합니다. 기존 DB에서 10초·30초 기록까지 정리할 때는 대신 위의 `remove-short-duration-modes.sql`을 먼저 실행합니다.
 6. Supabase Realtime에서 Presence/Broadcast 사용이 허용되어 있는지 확인합니다. `rooms`와 기존 `game_states` 테이블의 Postgres Changes publication 등록은 3번 SQL이 처리합니다.
 
-기존 운영 DB의 권장 적용 순서는 `remove-short-duration-modes.sql` → `versus-multiplayer-authority.sql` → `versus-public-rooms-chat.sql`입니다. 그 뒤 프론트엔드를 배포합니다.
+기존 운영 DB의 권장 적용 순서는 `remove-short-duration-modes.sql` → `versus-multiplayer-authority.sql` → `versus-public-rooms-chat.sql` → `fix-ranking-eligibility.sql`입니다. 그 뒤 프론트엔드를 배포합니다.
 
 공개방 목록에는 `waiting` 상태이면서 최근 90초 안에 방장 heartbeat가 확인된 방만 나타납니다. 비공개방은 직접 테이블 조회와 공개 목록에서 숨겨지고, 정확한 초대 코드를 `room_get` RPC에 전달한 경우에만 입장할 수 있습니다.
 

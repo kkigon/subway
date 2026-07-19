@@ -1,11 +1,10 @@
 -- ============================================================
--- 시간별 역대 랭킹 마이그레이션
--- - 기존 플레이는 60초 기록으로 보존
--- - 60/120/300초 랭킹을 각각 분리 집계
--- - 폐지된 10/30초 기록은 삭제
--- - 날짜 제한 없이 전체 기간의 최고 기록을 집계
--- - 기록 70점 + 백분위 30점, 분야별 이론 최고점 100점
--- - 여러 번 실행해도 안전
+-- 저장됐지만 랭킹에서 누락되는 플레이 복구
+-- - rank_mode/region/mode가 비거나 서로 다른 과거 기록 정규화
+-- - 구버전(950ms)과 현행(500ms)의 theoretical_max 차이를 서버 기준으로 통일
+-- - 프로필 행이 없어도 플레이는 익명 사용자로 집계
+-- - 100위 경계의 동점자는 모두 표시
+-- - plays 기록을 삭제하지 않으며 여러 번 실행해도 안전
 -- ============================================================
 
 begin;
@@ -16,8 +15,6 @@ alter table public.plays
 alter table public.plays
   add column if not exists theoretical_max integer;
 
--- rank_mode는 region/mode의 중복 저장값이라 예전 클라이언트나 부분 마이그레이션에서
--- 비어 있을 수 있다. 조회 때도 쓸 수 있는 단일 정규화 함수를 둔다.
 create or replace function public.normalized_play_rank_mode(
   p_rank_mode text,
   p_region text,
@@ -37,8 +34,6 @@ as $$
   end;
 $$;
 
--- 클라이언트 버전에 따라 달라질 수 있는 theoretical_max를 신뢰하지 않는다.
--- 현재 게임의 정답 공개 간격(500ms)과 노선별 역 수로 서버가 같은 기준을 계산한다.
 create or replace function public.ranking_theoretical_max(
   p_rank_mode text,
   p_duration integer
@@ -70,10 +65,6 @@ update public.plays
    set duration_sec = 60
  where duration_sec is null;
 
-delete from public.plays
- where duration_sec in (10, 30);
-
--- 비어 있거나 잘못 저장된 지역/모드 키를 기존 데이터로부터 복원한다.
 with normalized as (
   select id,
          public.normalized_play_rank_mode(rank_mode, region, mode) as rank_mode
@@ -90,38 +81,16 @@ update public.plays as plays
         split_part(normalized.rank_mode, ':', 1),
         split_part(normalized.rank_mode, ':', 2));
 
--- 모든 과거 기록도 현재 500ms 규칙의 동일한 서버 기준으로 다시 보정한다.
 update public.plays
    set theoretical_max = public.ranking_theoretical_max(rank_mode, duration_sec)
- where theoretical_max is distinct from
+ where duration_sec in (60, 120, 300)
+   and theoretical_max is distinct from
        public.ranking_theoretical_max(rank_mode, duration_sec);
 
 alter table public.plays
   alter column duration_sec set default 60,
-  alter column duration_sec set not null,
-  alter column theoretical_max set default 120,
-  alter column theoretical_max set not null;
+  alter column theoretical_max set default 120;
 
-alter table public.plays drop constraint if exists plays_duration_sec_check;
-alter table public.plays
-  add constraint plays_duration_sec_check
-  check (duration_sec in (60, 120, 300));
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_constraint
-     where conname = 'plays_theoretical_max_check'
-       and conrelid = 'public.plays'::regclass
-  ) then
-    alter table public.plays
-      add constraint plays_theoretical_max_check
-      check (theoretical_max > 0);
-  end if;
-end;
-$$;
-
--- 새 기록도 브라우저가 보낸 중복/계산 필드를 그대로 믿지 않고 서버에서 정규화한다.
 create or replace function public.normalize_play_ranking_fields()
 returns trigger
 language plpgsql
@@ -145,18 +114,10 @@ for each row execute function public.normalize_play_ranking_fields();
 
 revoke all on function public.normalize_play_ranking_fields() from public;
 
-drop index if exists public.plays_weekly_duration_rank_idx;
-
-create index if not exists plays_duration_rank_idx
-  on public.plays (rank_mode, duration_sec, user_id, score desc, created_at);
-
 create index if not exists plays_ranking_source_idx
   on public.plays (region, mode, duration_sec, user_id, score desc, created_at);
 
--- 반환 컬럼이 확장될 수 있도록 이전 버전 함수를 먼저 제거한다.
 drop function if exists public.all_time_ranking_by_duration(text, integer, integer);
-drop function if exists public.weekly_ranking_by_duration(text, integer, integer);
-drop function if exists public.weekly_ranking(text, integer);
 
 create function public.all_time_ranking_by_duration(
   p_mode text,
