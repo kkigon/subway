@@ -10,6 +10,7 @@ const SubwayMap = (() => {
   let animFrame = null;
   let interactive = false;   // 자유 이동(드래그/줌) 허용 여부
   let minW = 200, maxW = 200000; // 줌 한계(뷰 너비 기준)
+  let labelFormatter = name => name;
 
   function el(tag, attrs = {}) {
     const node = document.createElementNS(NS, tag);
@@ -220,7 +221,7 @@ const SubwayMap = (() => {
         "text-anchor": "middle",
         "data-key": st.key
       });
-      label.textContent = st.name;
+      label.textContent = labelFormatter(st.name);
       gLabels.appendChild(label);
     }
 
@@ -327,6 +328,17 @@ const SubwayMap = (() => {
     gLabels.querySelectorAll("text").forEach(t => t.classList.remove("revealed"));
   }
 
+  // 현재 지도와 이후 새로 렌더링할 지도의 역명 표시 방식을 함께 바꾼다.
+  // 거꾸로 모드가 해제되면 formatter를 생략해 원래 역명으로 즉시 복원한다.
+  function setLabelFormatter(formatter) {
+    labelFormatter = typeof formatter === "function" ? formatter : (name => name);
+    if (!network || !gLabels) return;
+    for (const st of network.stations.values()) {
+      const label = gLabels.querySelector(`text[data-key="${CSS.escape(st.key)}"]`);
+      if (label) label.textContent = labelFormatter(st.name);
+    }
+  }
+
   function handleResize() {
     if (!network) return;
     // 컨테이너 비율이 바뀌면 뷰 높이를 비율에 맞춰 보정(중심 유지)
@@ -341,6 +353,6 @@ const SubwayMap = (() => {
 
   return {
     init, render, fitAll, focusStation, revealLabel, hideFocus, handleResize,
-    setInteractive, showAllLabels, hideAllLabels
+    setInteractive, showAllLabels, hideAllLabels, setLabelFormatter
   };
 })();

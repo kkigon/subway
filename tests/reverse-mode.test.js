@@ -8,6 +8,7 @@ const read = file => fs.readFileSync(path.join(root, file), "utf8");
 const html = read("index.html");
 const css = read("css/style.css");
 const hangul = read("js/hangul.js");
+const map = read("js/map.js");
 const game = read("js/game.js");
 const backend = read("js/backend.js");
 const accountUi = read("js/account-ui.js");
@@ -34,6 +35,10 @@ assert.match(html, /class="reverse-word">거꾸로</);
 assert.match(css, /\.reverse-word\s*\{[^}]*rotate\(180deg\)/s);
 assert.match(css, /@keyframes reverse-rainbow-glow/);
 assert.match(css, /prefers-reduced-motion: reduce[\s\S]*play-mode-card--reverse/);
+assert.match(css, /body\.reverse-mode[\s\S]*background-color: #0b0e13/);
+assert.match(css, /\.reverse-mode #map-container[\s\S]*radial-gradient/);
+assert.match(css, /\.reverse-mode \.station-label \{ fill: #f7f9fc; stroke: #0a0d12; \}/);
+assert.match(css, /transition: color \.5s/);
 
 // 싱글플레이의 판정, 추천, 힌트, 타이머가 모두 거꾸로 방식에 연결된다.
 assert.match(game, /matchesReverseAnswer\(input, name\)/);
@@ -42,6 +47,10 @@ assert.match(game, /isReverseMode\(\) \? reverseText\(originalBase\)/);
 assert.match(game, /State\.playMode === "timed" \|\| isReverseMode\(\)/);
 assert.match(game, /config\.playMode === "reverse"/);
 assert.match(game, /homePlayMode[\s\S]*State\.playMode = homePlayMode/);
+assert.match(game, /SubwayMap\.setLabelFormatter\(enabled \? reverseDisplayName : null\)/);
+assert.match(game, /State\.playMode = radio\.value;[\s\S]*configureAnswerModeUI\(\)/);
+assert.match(map, /label\.textContent = labelFormatter\(st\.name\)/);
+assert.match(map, /function setLabelFormatter\(formatter\)/);
 
 // 랭킹 토글과 저장/조회 방식이 normal/reverse로 분리된다.
 assert.match(html, /id="rank-reverse-toggle"[\s\S]*role="switch"/);
@@ -60,6 +69,8 @@ assert.match(html, /id="vs-set-play-mode"/);
 assert.match(versusUi, /playMode: vsSettings\.playMode/);
 assert.match(versus, /await updateSettings\(\{ region, mode, customLines, duration, playMode \}\)/);
 assert.match(versus, /playMode: Room\.data\?\.play_mode === "reverse"/);
+assert.match(versus, /function onRoomChange\(fn\)/);
+assert.match(versusUi, /applyVersusTheme\(vsSettings\.playMode\)/);
 assert.match(authorityMigration, /p_play_mode not in \('timed', 'endless', 'reverse'\)/);
 assert.match(reverseMigration, /rooms\.play_mode/);
 

@@ -30,6 +30,7 @@ body {
   background: var(--paper);
   overflow: hidden;
   -webkit-tap-highlight-color: transparent;
+  transition: color .5s var(--ease), background-color .5s var(--ease);
 }
 
 .sr-only {
@@ -42,7 +43,7 @@ body {
   position: fixed; inset: 0;
   background:
     radial-gradient(circle at 30% 20%, #fdfdfb 0%, #f7f8fa 100%);
-  transition: filter 1s var(--ease), transform 1s var(--ease);
+  transition: filter 1s var(--ease), transform 1s var(--ease), background .5s var(--ease);
 }
 #metro-svg { width: 100%; height: 100%; display: block; }
 
@@ -87,7 +88,7 @@ body {
   stroke-linejoin: round;
   opacity: 0;
   transform: translateY(6px);
-  transition: opacity .65s var(--ease), transform .65s var(--ease);
+  transition: opacity .65s var(--ease), transform .65s var(--ease), fill .5s var(--ease), stroke .5s var(--ease);
   pointer-events: none;
 }
 .station-label.revealed { opacity: 1; transform: translateY(0); }
@@ -98,7 +99,7 @@ body {
   stroke: var(--ink);
   stroke-width: 2.5;
   stroke-dasharray: 4 5;
-  transition: opacity .4s var(--ease);
+  transition: opacity .4s var(--ease), stroke .5s var(--ease);
 }
 .focus-ring.pulse { animation: ring-pulse 1.6s ease-out infinite; }
 @keyframes ring-pulse {
@@ -293,7 +294,7 @@ body {
   padding: 20px;
   background: rgba(255, 255, 255, .35);
   opacity: 0; pointer-events: none;
-  transition: opacity .8s var(--ease);
+  transition: opacity .8s var(--ease), background-color .5s var(--ease);
   z-index: 40;
   overflow-y: auto;
 }
@@ -310,7 +311,7 @@ body {
   text-align: center;
   box-shadow: 0 24px 60px rgba(20, 25, 40, .18);
   transform: translateY(14px);
-  transition: transform .8s var(--ease);
+  transition: transform .8s var(--ease), background-color .5s var(--ease), color .5s var(--ease), border-color .5s var(--ease), box-shadow .5s var(--ease);
   margin: auto;
 }
 .at-home .home-card, .at-end .end-card { transform: translateY(0); }
@@ -1327,4 +1328,220 @@ body.modal-open { overflow: hidden; }
 @media (max-width: 560px) {
   .vs-countdown span { font-size: 110px; }
   .vs-countdown span.go { font-size: 72px; }
+}
+
+/* ============================================================
+   거꾸로 모드 — 0.5초 다크 테마
+   홈에서 모드를 선택한 순간부터 게임/결과/대전방까지 같은 테마를 유지한다.
+   ============================================================ */
+body.reverse-mode {
+  --ink: #f4f7fb;
+  --ink-soft: #aeb8c8;
+  --paper: #171a21;
+  --line-blue: #4aa3ff;
+  --line-green: #26d477;
+  --shadow: 0 12px 34px rgba(0, 0, 0, .42);
+  color-scheme: dark;
+  background-color: #0b0e13;
+}
+
+/* 테마가 켜지고 꺼질 때 주요 면과 글자가 한 덩어리처럼 스르륵 바뀐다. */
+.title-plate,
+.title-dot,
+.tagline,
+.region-btn,
+.mode-card,
+.mode-card small,
+.play-mode-card,
+.play-mode-card small,
+.game-duration-setting,
+.game-duration-label,
+.game-duration-btn,
+.game-duration-setting small,
+.custom-lines,
+.line-check,
+.primary-btn,
+.study-btn,
+.rank-open-btn,
+.rule-note,
+#answer-panel,
+#answer-input,
+.suggest-item,
+.share-btn,
+.study-bar,
+.settings-open-btn,
+.account-btn.login,
+.nick-tag,
+.modal-card,
+.modal-x,
+.field-input,
+.settings-row,
+.theme-swatch,
+.rank-variant-control,
+.rank-tab,
+.rank-row,
+.best-card,
+.play-row,
+.rank-region-tab,
+.rank-duration-tab,
+.vs-screen,
+.vs-create-box,
+.vs-room-refresh,
+.vs-room-item,
+.vs-code-big,
+.vs-players,
+.vs-seg-btn,
+.vs-custom-lines,
+.vs-chat-panel,
+.vs-chat-head button,
+.vs-chat-messages,
+.vs-chat-bubble,
+.vs-chat-form input,
+.vs-sb-item,
+.vs-result-item,
+.vs-countdown {
+  transition-duration: .5s;
+  transition-timing-function: var(--ease);
+}
+
+.reverse-mode #map-container {
+  background: radial-gradient(circle at 30% 20%, #181d27 0%, #080b10 100%);
+}
+.reverse-mode.at-home #map-container,
+.reverse-mode.at-end #map-container {
+  filter: blur(7px) saturate(.9) brightness(.58);
+}
+.reverse-mode .station-label { fill: #f7f9fc; stroke: #0a0d12; }
+.reverse-mode .focus-ring { stroke: #f7f9fc; }
+
+.reverse-mode .overlay,
+.reverse-mode .vs-screen { background-color: rgba(4, 7, 11, .56); }
+.reverse-mode .overlay-card {
+  background-color: rgba(18, 22, 29, .96);
+  border-color: #d9e0ec;
+  box-shadow: 0 26px 70px rgba(0, 0, 0, .55), 0 0 35px rgba(124, 77, 255, .10);
+}
+.reverse-mode .title-plate {
+  color: var(--ink); background: #181c25; border-color: var(--line-blue);
+}
+.reverse-mode .title-dot { background: #181c25; border-color: var(--line-blue); }
+
+.reverse-mode .region-btn { background: #20252f; color: var(--ink-soft); }
+.reverse-mode .region-btn.active {
+  background: #11151c; color: var(--line-blue); border-color: var(--line-blue);
+}
+.reverse-mode .mode-card,
+.reverse-mode .play-mode-card:not(.play-mode-card--reverse) {
+  background: #151922; border-color: #414957; color: var(--ink);
+}
+.reverse-mode .mode-option input:checked + .mode-card {
+  background: rgba(74, 163, 255, .16); border-color: var(--line-blue);
+}
+.reverse-mode .play-mode-option input:checked + .play-mode-card:not(.play-mode-card--reverse) {
+  background: rgba(38, 212, 119, .14); border-color: var(--line-green);
+}
+.reverse-mode .play-mode-card--reverse { color: var(--ink); }
+
+.reverse-mode .game-duration-setting,
+.reverse-mode .custom-lines,
+.reverse-mode .vs-custom-lines {
+  background: #11151c; border-color: #3e4654;
+}
+.reverse-mode .game-duration-btn,
+.reverse-mode .rank-duration-tab,
+.reverse-mode .vs-seg-btn {
+  background: #20252f; color: var(--ink-soft); border-color: #475060;
+}
+.reverse-mode .game-duration-btn.active,
+.reverse-mode .rank-duration-tab.active,
+.reverse-mode .vs-seg-btn.active {
+  background: var(--line-blue); color: #fff; border-color: var(--line-blue);
+}
+.reverse-mode .line-check:hover,
+.reverse-mode .vs-custom-lines .line-check:hover { background: #252b36; }
+
+.reverse-mode #answer-panel {
+  background: rgba(17, 21, 28, .94); color: var(--ink);
+  border-color: #9d7bff; box-shadow: 0 14px 46px rgba(0, 0, 0, .5), 0 0 28px rgba(124, 77, 255, .24);
+}
+.reverse-mode #answer-input,
+.reverse-mode .field-input,
+.reverse-mode .vs-chat-form input {
+  background: #0c1016; color: var(--ink); border-color: #4c5666;
+}
+.reverse-mode #answer-input::placeholder,
+.reverse-mode .field-input::placeholder,
+.reverse-mode .vs-chat-form input::placeholder { color: #7f8999; }
+.reverse-mode .suggest-item,
+.reverse-mode .share-btn {
+  background: #222833; color: var(--ink); border-color: #3b4351;
+}
+.reverse-mode .suggest-item:hover,
+.reverse-mode .suggest-item.active,
+.reverse-mode .share-btn:hover { background: #2d3441; border-color: #e5eaf2; }
+.reverse-mode .submit-btn { background: #7c4dff; color: #fff; }
+.reverse-mode .submit-btn:hover { background: #936fff; }
+.reverse-mode .study-bar {
+  background: linear-gradient(to bottom, rgba(11,14,19,.97), rgba(11,14,19,.72) 80%, rgba(11,14,19,0));
+}
+
+.reverse-mode .study-btn { background: #171c23; }
+.reverse-mode .study-btn:hover { background: rgba(38, 212, 119, .13); }
+.reverse-mode .rank-open-btn { background: #191b20; color: #ffd257; }
+.reverse-mode .rank-open-btn:hover { background: #29271d; }
+.reverse-mode .settings-open-btn:hover,
+.reverse-mode .modal-x,
+.reverse-mode .modal-x:hover { background: #272d37; color: var(--ink); }
+.reverse-mode .modal-backdrop { background: rgba(0, 0, 0, .68); }
+.reverse-mode .settings-row,
+.reverse-mode .best-card,
+.reverse-mode .play-row,
+.reverse-mode .rank-row,
+.reverse-mode .theme-swatch {
+  background: #20252e; border-color: #3d4654; color: var(--ink);
+}
+.reverse-mode .theme-swatch.selected {
+  background: color-mix(in srgb, var(--c) 18%, #171a21);
+}
+.reverse-mode .rank-variant-control { border-color: #414a59; }
+.reverse-mode .rank-tab { background: #252b35; }
+.reverse-mode .rank-tab.active,
+.reverse-mode .rank-region-tab.active { background: var(--line-blue); color: #fff; border-color: var(--line-blue); }
+.reverse-mode .rank-region-tab { border-color: #414957; }
+.reverse-mode .rank-row.mine { background: color-mix(in srgb, var(--line-blue) 18%, #20252e); }
+.reverse-mode .rank-row.score-exceptional { color: #23262b; }
+.reverse-mode .toast { background: #7c4dff; color: #fff; }
+
+.reverse-mode .vs-create-box,
+.reverse-mode .vs-room-item,
+.reverse-mode .vs-code-big,
+.reverse-mode .vs-players,
+.reverse-mode .vs-chat-panel,
+.reverse-mode .vs-chat-messages,
+.reverse-mode .vs-chat-bubble,
+.reverse-mode .vs-sb-item,
+.reverse-mode .vs-result-item {
+  background: #191e27; border-color: #3e4756; color: var(--ink);
+}
+.reverse-mode .vs-room-refresh,
+.reverse-mode .vs-chat-head button { background: #252b35; border-color: #414a58; color: var(--ink-soft); }
+.reverse-mode .vs-divider::before,
+.reverse-mode .vs-divider::after { background: #3c4553; }
+.reverse-mode .vs-code-big { color: var(--line-blue); }
+.reverse-mode .vs-role-badge,
+.reverse-mode .vs-chat-toggle,
+.reverse-mode .vs-chat-form button { background: #7c4dff; color: #fff; }
+.reverse-mode .vs-result-item.first {
+  background: linear-gradient(135deg, #4d3d12, #765c18); color: #fff2bd; border-color: #d7ad36;
+}
+.reverse-mode .vs-countdown { background: rgba(4, 7, 11, .66); }
+
+@media (prefers-reduced-motion: reduce) {
+  body,
+  #map-container,
+  .overlay,
+  .overlay-card,
+  .station-label,
+  .focus-ring,
+  body * { transition-duration: .01ms !important; }
 }

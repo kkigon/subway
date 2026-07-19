@@ -19,6 +19,12 @@
   let unreadChat = 0;
   let lastChatMessageId = null;
 
+  function applyVersusTheme(playMode) {
+    const reverse = playMode === "reverse";
+    if (typeof setReverseModeVisuals === "function") setReverseModeVisuals(reverse);
+    else document.body.classList.toggle("reverse-mode", reverse);
+  }
+
   /* ---------- 화면 전환 ---------- */
   // 대전 관련 오버레이를 보여주고 홈/게임 오버레이는 숨긴다.
   function showScreen(id) {
@@ -271,6 +277,7 @@
     vsSettings.mode = ["core", "all", "custom"].includes(data.mode) ? data.mode : "all";
     vsSettings.duration = allowedDurations.includes(Number(data.duration_sec)) ? Number(data.duration_sec) : 60;
     vsSettings.playMode = data.play_mode === "reverse" ? "reverse" : "timed";
+    applyVersusTheme(vsSettings.playMode);
     vsSettings.customLines = String(data.custom_lines || "").split(",").filter(Boolean);
     document.querySelectorAll("#vs-set-region .vs-seg-btn").forEach(button =>
       button.classList.toggle("active", button.dataset.region === vsSettings.region));
@@ -349,7 +356,11 @@
     settingsWired = true;
     wireSeg("#vs-set-region", (btn) => { vsSettings.region = btn.dataset.region; syncRegionUI(); queueSettingsSave(); });
     wireSeg("#vs-set-mode", (btn) => { vsSettings.mode = btn.dataset.mode; updateCustomVisibility(); queueSettingsSave(); });
-    wireSeg("#vs-set-play-mode", (btn) => { vsSettings.playMode = btn.dataset.playMode === "reverse" ? "reverse" : "timed"; queueSettingsSave(); });
+    wireSeg("#vs-set-play-mode", (btn) => {
+      vsSettings.playMode = btn.dataset.playMode === "reverse" ? "reverse" : "timed";
+      applyVersusTheme(vsSettings.playMode);
+      queueSettingsSave();
+    });
     wireSeg("#vs-set-duration", (btn) => { vsSettings.duration = parseInt(btn.dataset.dur, 10) || 60; queueSettingsSave(); });
     $("#vs-start-btn")?.addEventListener("click", doStartGame);
   }
@@ -447,7 +458,7 @@
   // 대기실로 복귀 (모두)
   function backToLobbyUI() {
     // 게임/엔딩 상태 정리하고 대기실 표시
-    document.body.classList.remove("in-game", "at-end", "versus-mode", "reverse-mode");
+    document.body.classList.remove("in-game", "at-end", "versus-mode");
     const sb = $("#vs-scoreboard"); if (sb) sb.classList.remove("show");
     enterLobby();
   }
@@ -627,6 +638,11 @@
     Versus.onChatChange(renderChat);
     // 방장 권한이 바뀌면 역할/설정 영역 갱신
     Versus.onHostChange(refreshRole);
+    Versus.onRoomChange((room) => {
+      if (!document.body.classList.contains("vs-room-connected")) return;
+      applyVersusTheme(room?.play_mode);
+      if (!Versus.isHost()) syncSettingsFromRoom();
+    });
     // 게임 시작 신호 → 모두 같은 설정/문제로 게임 화면 진입(카운트다운)
     Versus.onGameStart((cfg) => {
       if (window.VersusGame && typeof window.VersusGame.start === "function") {

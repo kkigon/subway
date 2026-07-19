@@ -37,10 +37,12 @@ const Versus = (() => {
 
   const playerListeners = [];
   const hostListeners = [];
+  const roomListeners = [];
   const backToLobbyListeners = [];
   const chatListeners = [];
   function onPlayersChange(fn) { playerListeners.push(fn); }
   function onHostChange(fn) { hostListeners.push(fn); }
+  function onRoomChange(fn) { roomListeners.push(fn); }
   function onBackToLobby(fn) { backToLobbyListeners.push(fn); }
   function onChatChange(fn) { chatListeners.push(fn); }
   function notifyPlayers() { const list = withTyping(Room.players); playerListeners.forEach(fn => { try { fn(list); } catch (e) {} }); }
@@ -265,6 +267,7 @@ const Versus = (() => {
     Room.data = Object.assign({}, Room.data || {}, row);
     Room.hostId = row.host_id || null;
     if (hasRevision) Room.hostRevision = revision;
+    roomListeners.forEach(fn => { try { fn(Room.data); } catch (e) {} });
     if (previousHost !== Room.hostId) {
       Room.players = sortPlayers(Room.players);
       notifyHostIfChanged();
@@ -1059,7 +1062,7 @@ const Versus = (() => {
     updateSettings, startGame, onGameStart, onState, sendAnswer,
     setTyping, backToLobby, onBackToLobby, forceEnd,
     validateRoomTitle, validateChatText, sendChat, reportChat, refreshChat, onChatChange,
-    onPlayersChange, onHostChange, getPlayers: () => withTyping(Room.players),
+    onPlayersChange, onHostChange, onRoomChange, getPlayers: () => withTyping(Room.players),
     getMessages: () => [...Room.messages],
     isHost, getHostId,
   };

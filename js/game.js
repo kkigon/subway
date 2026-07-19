@@ -107,13 +107,17 @@ function questionPrompt(isTransfer) {
     : "이 역의 이름을 거꾸로 입력하세요!";
   return isTransfer ? "이 환승역의 이름은?" : "이 역의 이름은?";
 }
+function setReverseModeVisuals(enabled) {
+  document.body.classList.toggle("reverse-mode", !!enabled);
+  SubwayMap.setLabelFormatter(enabled ? reverseDisplayName : null);
+}
 function configureAnswerModeUI() {
   const input = $("#answer-input");
   if (!input) return;
   const reverse = isReverseMode();
   input.placeholder = reverse ? "역 이름을 거꾸로 입력하세요" : "역 이름을 입력하세요";
   input.setAttribute("aria-label", reverse ? "거꾸로 된 역 이름 입력" : "역 이름 입력");
-  document.body.classList.toggle("reverse-mode", reverse);
+  setReverseModeVisuals(reverse);
 }
 
 function regionMapOptions(displayLineIds = regionLineIds()) {
@@ -406,7 +410,7 @@ function endVersusFromState(snap) {
   State.versus = false;
   cancelAnimationFrame(State.timerFrame);
   SubwayMap.setInteractive(false); SubwayMap.hideFocus(); SubwayMap.fitAll();
-  document.body.classList.remove("in-game", "versus-mode", "reverse-mode");
+  document.body.classList.remove("in-game", "versus-mode");
   const sb = $("#vs-scoreboard"); if (sb) sb.classList.remove("show");
   const qb = $("#vs-qtimer"); if (qb) qb.classList.remove("show");
 
@@ -796,8 +800,9 @@ function goHome() {
   if (homeMode) State.mode = homeMode;
   if (homePlayMode) State.playMode = homePlayMode;
   cancelAnimationFrame(State.timerFrame);
-  document.body.classList.remove("in-game", "at-end", "studying", "endless-mode", "reverse-mode");
+  document.body.classList.remove("in-game", "at-end", "studying", "endless-mode");
   document.body.classList.add("at-home");
+  configureAnswerModeUI();
   SubwayMap.setInteractive(false);
   SubwayMap.hideFocus();
   // 홈 배경용 전체 노선도
@@ -889,6 +894,7 @@ document.addEventListener("DOMContentLoaded", () => {
     radio.addEventListener("change", () => {
       State.playMode = radio.value;
       $("#game-duration-setting")?.classList.toggle("hidden", State.playMode === "endless");
+      configureAnswerModeUI();
     });
   });
   document.querySelectorAll(".game-duration-btn").forEach(btn => {
