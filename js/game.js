@@ -12,7 +12,7 @@ const $ = sel => document.querySelector(sel);
 const State = {
   region: "seoul",       // REGION_LABELS의 지역 코드
   mode: "core",          // core | all | custom (노선 범위)
-  playMode: "timed",     // timed(시간 도전) | endless(연속 모드)
+  playMode: "timed",     // timed(시간 도전) | endless(연속 모드) | reverse(거꾸로)
   gameDuration: DEFAULT_GAME_SECONDS,
   customLines: new Set(),
   playing: false,
@@ -95,6 +95,27 @@ function regionLineIds() {
   return regionLines().map(l => l.id);
 }
 
+function isReverseMode() { return State.playMode === "reverse"; }
+function isTimedMode() { return State.playMode === "timed" || isReverseMode(); }
+function answerDisplayName(name) { return isReverseMode() ? reverseDisplayName(name) : name; }
+function matchesCurrentAnswer(input, name) {
+  return isReverseMode() ? matchesReverseAnswer(input, name) : matchesAnswer(input, name);
+}
+function questionPrompt(isTransfer) {
+  if (isReverseMode()) return isTransfer
+    ? "이 환승역의 이름을 거꾸로 입력하세요!"
+    : "이 역의 이름을 거꾸로 입력하세요!";
+  return isTransfer ? "이 환승역의 이름은?" : "이 역의 이름은?";
+}
+function configureAnswerModeUI() {
+  const input = $("#answer-input");
+  if (!input) return;
+  const reverse = isReverseMode();
+  input.placeholder = reverse ? "역 이름을 거꾸로 입력하세요" : "역 이름을 입력하세요";
+  input.setAttribute("aria-label", reverse ? "거꾸로 된 역 이름 입력" : "역 이름 입력");
+  document.body.classList.toggle("reverse-mode", reverse);
+}
+
 function regionMapOptions(displayLineIds = regionLineIds()) {
   return {
     displayLineIds,
@@ -162,11 +183,12 @@ function startGame() {
   document.body.classList.remove("at-home", "at-end", "studying");
   // 연속 모드면 타이머 숨김
   document.body.classList.toggle("endless-mode", State.playMode === "endless");
+  configureAnswerModeUI();
 
   // 노선도가 선명해진 뒤 첫 문제로 줌인
   setTimeout(() => {
     nextQuestion();
-    if (State.playMode === "timed") {
+    if (isTimedMode()) {
       State.endAt = performance.now() + State.gameDuration * 1000;
       tickTimer();
     } else {
@@ -190,8 +212,8 @@ function shuffle(arr) {
    config = {
      region: REGION_LABELS의 지역 코드,
      lineIds: [...],          // 출제 대상 노선 id
-     playMode: 'timed'|'endless',
-     duration: 60,            // 초 (timed일 때)
+     playMode: 'timed'|'reverse',
+     duration: 60,            // 초
      order: [stationKey, ...] // 방장이 정한 문제 순서(모두 동일)
    }
    모든 참가자가 같은 config로 호출 → 같은 문제를 같은 순서로 본다.
@@ -199,7 +221,7 @@ function shuffle(arr) {
 function startVersusGame(config) {
   State.region = config.region || "seoul";
   State.mode = config.mode || "all";
-  State.playMode = "timed";
+  State.playMode = config.playMode === "reverse" ? "reverse" : "timed";
   State.versus = true;
   State.versusDuration = config.duration || 60;
 
@@ -235,6 +257,7 @@ function startVersusGame(config) {
   document.querySelectorAll(".vs-screen").forEach(s => s.classList.remove("show"));
   document.body.classList.add("in-game", "versus-mode");
   document.body.classList.remove("at-home", "at-end", "studying", "endless-mode");
+  configureAnswerModeUI();
 
   SubwayMap.setInteractive(false);
   $("#answer-input").disabled = true;
@@ -354,11 +377,11 @@ function applyVersusState(snap) {
       if (snap.winnerId) {
         SubwayMap.revealLabel(State.current, true);
         Sound.play("correct");
-        popFeedback(`⭕ ${snap.winnerName} 정답! 「${st.name}」`, "ok");
+        popFeedback(`⭕ ${snap.winnerName} 정답! 「${answerDisplayName(st.name)}」`, "ok");
       } else {
         SubwayMap.revealLabel(State.current, false);
         Sound.play("wrong");
-        popFeedback(`⏱️ 시간 초과! 정답은 「${st.name}」`, "no");
+        popFeedback(`⏱️ 시간 초과! 정답은 「${answerDisplayName(st.name)}」`, "no");
       }
     }
   } else if (snap.phase === "playing") {
@@ -383,7 +406,7 @@ function endVersusFromState(snap) {
   State.versus = false;
   cancelAnimationFrame(State.timerFrame);
   SubwayMap.setInteractive(false); SubwayMap.hideFocus(); SubwayMap.fitAll();
-  document.body.classList.remove("in-game", "versus-mode");
+  document.body.classList.remove("in-game", "versus-mode", "reverse-mode");
   const sb = $("#vs-scoreboard"); if (sb) sb.classList.remove("show");
   const qb = $("#vs-qtimer"); if (qb) qb.classList.remove("show");
 
@@ -409,7 +432,7 @@ function renderCurrentQuestion() {
     chip.textContent = line.badge;
     badges.appendChild(chip);
   }
-  $("#question-text").textContent = lineIds.length > 1 ? "이 환승역의 이름은?" : "이 역의 이름은?";
+  $("#question-text").textContent = questionPrompt(lineIds.length > 1);
   $("#hint-display").classList.remove("show");
   clearSuggestions();
 }
@@ -441,7 +464,7 @@ function submitVersusAnswer() {
   const value = input.value.trim();
   if (!value) return;
   const st = State.network.stations.get(State.current);
-  const correct = matchesAnswer(value, st.name);
+  const correct = matchesCurrentAnswer(value, st.name);
 
   if (!correct) {
     Sound.play("wrong");
@@ -503,7 +526,7 @@ function nextQuestion() {
     chip.textContent = line.badge;
     badges.appendChild(chip);
   }
-  $("#question-text").textContent = lineIds.length > 1 ? "이 환승역의 이름은?" : "이 역의 이름은?";
+  $("#question-text").textContent = questionPrompt(lineIds.length > 1);
 
   const input = $("#answer-input");
   input.value = "";
@@ -521,7 +544,7 @@ function submitAnswer() {
   const input = $("#answer-input");
   const value = input.value.trim();
   const st = State.network.stations.get(State.current);
-  const correct = matchesAnswer(value, st.name);
+  const correct = matchesCurrentAnswer(value, st.name);
 
   State.awaitingNext = true;
   input.disabled = true;
@@ -535,7 +558,7 @@ function submitAnswer() {
     $("#score").textContent = State.score;
     popFeedback("⭕ 정답!", "ok");
   } else {
-    popFeedback(`❌ 정답은 「${st.name}」`, "no");
+    popFeedback(`❌ 정답은 「${answerDisplayName(st.name)}」`, "no");
   }
 
   // 연속 모드: 틀리면 게임 오버
@@ -566,7 +589,8 @@ function useHint() {
   if (State.hintsLeft === 0) $("#btn-hint").disabled = true;
 
   const st = State.network.stations.get(State.current);
-  const base = st.name.replace(/\(.+?\)$/, ""); // 괄호 별칭 제외하고 초성 표시
+  const originalBase = st.name.replace(/\(.+?\)$/, ""); // 괄호 별칭 제외
+  const base = isReverseMode() ? reverseText(originalBase) : originalBase;
   $("#hint-chars").textContent = toChosung(base).split("").join(" ");
   $("#hint-display").classList.add("show");
   $("#answer-input").focus();
@@ -580,7 +604,7 @@ function updateSuggestions() {
 
   const results = [];
   for (const st of State.network.stations.values()) {
-    const score = searchScore(q, st.name);
+    const score = isReverseMode() ? reverseSearchScore(q, st.name) : searchScore(q, st.name);
     if (score > 0) results.push({ st, score });
   }
   results.sort((a, b) => b.score - a.score || a.st.name.length - b.st.name.length || a.st.name.localeCompare(b.st.name, "ko"));
@@ -596,7 +620,7 @@ function updateSuggestions() {
       const l = lineById(id);
       return `<span class="line-chip sm" style="--c:${l.color};--t:${l.darkText ? "#23262b" : "#fff"}">${l.badge}</span>`;
     }).join("");
-    item.innerHTML = `${chips}<span class="suggest-name">${st.name}</span>`;
+    item.innerHTML = `${chips}<span class="suggest-name">${answerDisplayName(st.name)}</span>`;
     item.addEventListener("pointerdown", e => {
       e.preventDefault(); // 입력창 포커스 유지
       pickSuggestion(st);
@@ -607,7 +631,7 @@ function updateSuggestions() {
 }
 
 function pickSuggestion(st) {
-  $("#answer-input").value = st.name;
+  $("#answer-input").value = answerDisplayName(st.name).replace(/ \(.+\)$/, "");
   clearSuggestions();
   $("#answer-input").focus();
 }
@@ -644,6 +668,9 @@ function endGame() {
   if (State.playMode === "endless") {
     $("#end-label").textContent = "🔥 연속 정답";
     $("#final-score-unit").textContent = "연속";
+  } else if (isReverseMode()) {
+    $("#end-label").textContent = "🙃 거꾸로 점수";
+    $("#final-score-unit").textContent = "역";
   } else {
     $("#end-label").textContent = "최종 점수";
     $("#final-score-unit").textContent = "역";
@@ -708,6 +735,9 @@ function shareText() {
   if (State.playMode === "endless") {
     return `🚇 지하철 게임 — ${modeLabel()} · 연속 모드에서 ${State.score}개 역을 맞췄어요! 당신도 도전해보세요!`;
   }
+  if (isReverseMode()) {
+    return `🙃 지하철 게임 — ${modeLabel()} · 거꾸로 모드에서 ${State.gameDuration}초 동안 ${State.score}개 역을 맞췄어요! 당신도 도전해보세요!`;
+  }
   return `🚇 지하철 게임 — ${modeLabel()}에서 ${State.gameDuration}초 동안 ${State.score}개 역을 맞췄어요! 당신도 도전해보세요!`;
 }
 
@@ -756,8 +786,17 @@ function toast(msg) {
 function goHome() {
   State.playing = false;
   State.studying = false;
+  State.versus = false;
+  // 대전방 설정이 State를 바꿨더라도 홈에 보이는 선택값으로 되돌린다.
+  // 그렇지 않으면 거꾸로 대전 후 "시간 도전" 버튼이 선택돼 있는데도 거꾸로 판정될 수 있다.
+  const homeRegion = document.querySelector(".region-btn.active")?.dataset.region;
+  const homeMode = document.querySelector('input[name="mode"]:checked')?.value;
+  const homePlayMode = document.querySelector('input[name="playmode"]:checked')?.value;
+  if (homeRegion) State.region = homeRegion;
+  if (homeMode) State.mode = homeMode;
+  if (homePlayMode) State.playMode = homePlayMode;
   cancelAnimationFrame(State.timerFrame);
-  document.body.classList.remove("in-game", "at-end", "studying", "endless-mode");
+  document.body.classList.remove("in-game", "at-end", "studying", "endless-mode", "reverse-mode");
   document.body.classList.add("at-home");
   SubwayMap.setInteractive(false);
   SubwayMap.hideFocus();
@@ -845,11 +884,11 @@ document.addEventListener("DOMContentLoaded", () => {
       updateStartButton();
     });
   });
-  // 플레이 모드 선택 (시간 도전 / 연속 모드)
+  // 플레이 모드 선택 (시간 도전 / 연속 / 거꾸로)
   document.querySelectorAll('input[name="playmode"]').forEach(radio => {
     radio.addEventListener("change", () => {
       State.playMode = radio.value;
-      $("#game-duration-setting")?.classList.toggle("hidden", State.playMode !== "timed");
+      $("#game-duration-setting")?.classList.toggle("hidden", State.playMode === "endless");
     });
   });
   document.querySelectorAll(".game-duration-btn").forEach(btn => {

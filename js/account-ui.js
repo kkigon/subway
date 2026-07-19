@@ -182,18 +182,21 @@
     const bestLabel = {};
     const bestOrder = [];
     const durations = [60, 120, 300];
-    for (const [region, label] of Object.entries(REGION_LABELS)) {
-      const hasCore = regionSupportsCore(region);
-      if (hasCore) {
-        for (const duration of durations) {
-          bestLabel[`${region}:core:${duration}`] = `${label} 1~9호선 · ${duration}초`;
-          bestOrder.push(`${region}:core:${duration}`);
+    for (const variant of ["normal", "reverse"]) {
+      const prefix = variant === "reverse" ? "🙃 거꾸로 · " : "";
+      for (const [region, label] of Object.entries(REGION_LABELS)) {
+        const hasCore = regionSupportsCore(region);
+        if (hasCore) {
+          for (const duration of durations) {
+            bestLabel[`${region}:core:${duration}:${variant}`] = `${prefix}${label} 1~9호선 · ${duration}초`;
+            bestOrder.push(`${region}:core:${duration}:${variant}`);
+          }
         }
-      }
-      for (const mode of ["all", "custom"]) {
-        for (const duration of durations) {
-          bestLabel[`${region}:${mode}:${duration}`] = `${label} ${mode === "all" ? "전체" : "커스텀"} · ${duration}초`;
-          bestOrder.push(`${region}:${mode}:${duration}`);
+        for (const mode of ["all", "custom"]) {
+          for (const duration of durations) {
+            bestLabel[`${region}:${mode}:${duration}:${variant}`] = `${prefix}${label} ${mode === "all" ? "전체" : "커스텀"} · ${duration}초`;
+            bestOrder.push(`${region}:${mode}:${duration}:${variant}`);
+          }
         }
       }
     }
@@ -213,7 +216,7 @@
         const date = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
         return `<div class="play-row">
           <span class="play-score">${pl.score}역</span>
-          <span class="play-mode">${escapeHtml(pl.mode_label)}</span>
+          <span class="play-mode">${pl.play_variant === "reverse" ? "🙃 거꾸로 · " : ""}${escapeHtml(pl.mode_label)}</span>
           <span class="play-date">${date}</span>
         </div>`;
       }).join("");
@@ -226,6 +229,7 @@
   let rankRegion = "seoul";  // 랭킹에서 보고 있는 지역
   let rankTab = "core";      // 랭킹에서 보고 있는 노선 범위(core/all)
   let rankDuration = 60;      // 랭킹에서 보고 있는 제한 시간(초)
+  let rankVariant = "normal"; // normal | reverse
   let rankLoadRevision = 0;   // 필터를 빠르게 바꿀 때 이전 응답이 화면을 덮지 않게 한다.
 
   async function openRanking() {
@@ -234,6 +238,7 @@
     const cur = (typeof State !== "undefined" && State.region) ? State.region : "seoul";
     const duration = (typeof State !== "undefined" && [60, 120, 300].includes(State.gameDuration))
       ? State.gameDuration : 60;
+    setRankVariant(typeof State !== "undefined" && State.playMode === "reverse", false);
     setRankDuration(duration, false);
     setRankRegion(cur);
   }
@@ -265,6 +270,20 @@
     if (reload) loadRanking();
   }
 
+  function setRankVariant(reverse, reload = true) {
+    rankVariant = reverse ? "reverse" : "normal";
+    const toggle = $("#rank-reverse-toggle");
+    toggle?.classList.toggle("active", reverse);
+    toggle?.setAttribute("aria-checked", String(reverse));
+    const status = $("#rank-reverse-status");
+    if (status) status.textContent = reverse ? "ON" : "OFF";
+    const note = $("#rank-note");
+    if (note) note.textContent = reverse
+      ? "🙃 거꾸로 모드의 제한 시간별 최고 기록 상위 100위를 집계해요"
+      : "⏱️ 일반 모드의 제한 시간별 최고 기록 상위 100위를 집계해요";
+    if (reload) loadRanking();
+  }
+
   async function loadRanking() {
     const loadRevision = ++rankLoadRevision;
     const body = $("#ranking-body");
@@ -276,7 +295,8 @@
     // DB에는 region별 mode를 합쳐 "seoul:core" 같은 키로 저장한다.
     const rankKey = `${rankRegion}:${rankTab}`;
     const requestedDuration = rankDuration;
-    const result = await Account.allTimeRanking(rankKey, requestedDuration, 100);
+    const requestedVariant = rankVariant;
+    const result = await Account.allTimeRanking(rankKey, requestedDuration, 100, requestedVariant);
     if (loadRevision !== rankLoadRevision) return;
     if (result.error) {
       body.innerHTML = `<p class="muted">랭킹을 불러오지 못했어요. 잠시 후 다시 시도해주세요.</p>`;
@@ -313,16 +333,21 @@
   function closeModal(sel) { $(sel).classList.remove("show"); if (!document.querySelector(".modal-backdrop.show")) document.body.classList.remove("modal-open"); }
 
   /* ---------- game.js가 호출하는 훅 ---------- */
-  // 시간제한 모드 한 판이 끝나면 game.js가 이걸 부른다.
+  // 시간제한/거꾸로 모드 한 판이 끝나면 game.js가 이걸 부른다.
   window.onPlayFinished = async ({ score, region, mode, modeLabel, playMode, duration, theoreticalMax }) => {
-    if (playMode !== "timed") return;          // 연속 모드는 저장 안 함
+    if (playMode !== "timed" && playMode !== "reverse") return; // 연속/알 수 없는 모드는 저장 안 함
     if (!Account.isLoggedIn() || !Account.hasProfile()) return; // 비로그인은 저장 안 함
     // 랭킹/기록 구분을 위해 region을 함께 저장. rankMode = "지역:모드"
     const rankMode = `${region || "seoul"}:${mode}`;
-    await Account.savePlay({
+    const reverse = playMode === "reverse";
+    const saved = await Account.savePlay({
       score, region: region || "seoul", mode, rankMode,
       modeLabel: `${modeLabel} · ${duration}초`, duration, theoreticalMax,
+      playVariant: reverse ? "reverse" : "normal",
     });
+    if (reverse && !saved && typeof toast === "function") {
+      toast("거꾸로 기록 저장에 실패했어요. DB 마이그레이션 적용 여부를 확인해주세요.");
+    }
   };
 
   /* ---------- 초기화 ---------- */
@@ -337,6 +362,7 @@
       t.addEventListener("click", () => setRankRegion(t.dataset.region)));
     document.querySelectorAll(".rank-duration-tab").forEach(t =>
       t.addEventListener("click", () => setRankDuration(Number(t.dataset.duration))));
+    $("#rank-reverse-toggle")?.addEventListener("click", () => setRankVariant(rankVariant !== "reverse"));
 
     // 모달 닫기 버튼 / 배경 클릭
     document.querySelectorAll("[data-close-modal]").forEach(btn =>

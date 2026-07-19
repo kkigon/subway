@@ -16,6 +16,9 @@ alter table public.plays
 alter table public.plays
   add column if not exists theoretical_max integer;
 
+alter table public.plays
+  add column if not exists play_variant text;
+
 -- rank_mode는 region/mode의 중복 저장값이라 예전 클라이언트나 부분 마이그레이션에서
 -- 비어 있을 수 있다. 조회 때도 쓸 수 있는 단일 정규화 함수를 둔다.
 create or replace function public.normalized_play_rank_mode(
@@ -70,6 +73,16 @@ update public.plays
    set duration_sec = 60
  where duration_sec is null;
 
+-- 이 마이그레이션 이전의 모든 기록은 기존 일반 모드 기록이다.
+update public.plays
+   set play_variant = 'normal'
+ where play_variant is null
+    or lower(btrim(play_variant)) not in ('normal', 'reverse');
+
+update public.plays
+   set play_variant = lower(btrim(play_variant))
+ where play_variant is distinct from lower(btrim(play_variant));
+
 delete from public.plays
  where duration_sec in (10, 30);
 
@@ -100,12 +113,18 @@ alter table public.plays
   alter column duration_sec set default 60,
   alter column duration_sec set not null,
   alter column theoretical_max set default 120,
-  alter column theoretical_max set not null;
+  alter column theoretical_max set not null,
+  alter column play_variant set default 'normal',
+  alter column play_variant set not null;
 
 alter table public.plays drop constraint if exists plays_duration_sec_check;
 alter table public.plays
   add constraint plays_duration_sec_check
   check (duration_sec in (60, 120, 300));
+
+alter table public.plays drop constraint if exists plays_play_variant_check;
+alter table public.plays add constraint plays_play_variant_check
+  check (play_variant in ('normal', 'reverse'));
 
 do $$
 begin
@@ -132,6 +151,10 @@ begin
   new.region := lower(coalesce(nullif(btrim(new.region), ''), 'seoul'));
   new.mode := lower(coalesce(nullif(btrim(new.mode), ''), 'all'));
   new.rank_mode := new.region || ':' || new.mode;
+  new.play_variant := case
+    when lower(btrim(coalesce(new.play_variant, 'normal'))) = 'reverse' then 'reverse'
+    else 'normal'
+  end;
   new.theoretical_max := public.ranking_theoretical_max(new.rank_mode, new.duration_sec);
   return new;
 end;
@@ -139,7 +162,7 @@ $$;
 
 drop trigger if exists normalize_play_ranking_fields_trigger on public.plays;
 create trigger normalize_play_ranking_fields_trigger
-before insert or update of region, mode, rank_mode, duration_sec, theoretical_max
+before insert or update of region, mode, rank_mode, duration_sec, theoretical_max, play_variant
 on public.plays
 for each row execute function public.normalize_play_ranking_fields();
 
@@ -148,19 +171,21 @@ revoke all on function public.normalize_play_ranking_fields() from public;
 drop index if exists public.plays_weekly_duration_rank_idx;
 
 create index if not exists plays_duration_rank_idx
-  on public.plays (rank_mode, duration_sec, user_id, score desc, created_at);
+  on public.plays (play_variant, rank_mode, duration_sec, user_id, score desc, created_at);
 
 create index if not exists plays_ranking_source_idx
-  on public.plays (region, mode, duration_sec, user_id, score desc, created_at);
+  on public.plays (play_variant, region, mode, duration_sec, user_id, score desc, created_at);
 
 -- 반환 컬럼이 확장될 수 있도록 이전 버전 함수를 먼저 제거한다.
 drop function if exists public.all_time_ranking_by_duration(text, integer, integer);
+drop function if exists public.all_time_ranking_by_duration_variant(text, integer, text, integer);
 drop function if exists public.weekly_ranking_by_duration(text, integer, integer);
 drop function if exists public.weekly_ranking(text, integer);
 
-create function public.all_time_ranking_by_duration(
+create function public.all_time_ranking_by_duration_variant(
   p_mode text,
   p_duration integer,
+  p_variant text,
   p_limit integer default 100
 )
 returns table (
@@ -189,6 +214,8 @@ as $$
              plays.rank_mode, plays.region, plays.mode
            ) = p_mode
        and plays.duration_sec = p_duration
+       and plays.play_variant = lower(btrim(p_variant))
+       and lower(btrim(p_variant)) in ('normal', 'reverse')
        and p_duration in (60, 120, 300)
   ),
   user_bests as (
@@ -242,6 +269,22 @@ as $$
    order by ranked.adjusted_score desc, ranked.best_score desc, ranked.first_played_at;
 $$;
 
+create function public.all_time_ranking_by_duration(
+  p_mode text,
+  p_duration integer,
+  p_limit integer default 100
+)
+returns table (
+  rank bigint, user_id uuid, nickname text, theme_line text, best_score bigint,
+  theoretical_max bigint, record_points numeric, percentile_bonus numeric, adjusted_score numeric
+)
+language sql security definer set search_path = '' stable
+as $$
+  select * from public.all_time_ranking_by_duration_variant(p_mode, p_duration, 'normal', p_limit);
+$$;
+
+revoke all on function public.all_time_ranking_by_duration_variant(text, integer, text, integer) from public;
+grant execute on function public.all_time_ranking_by_duration_variant(text, integer, text, integer) to anon, authenticated;
 revoke all on function public.all_time_ranking_by_duration(text, integer, integer) from public;
 grant execute on function public.all_time_ranking_by_duration(text, integer, integer) to anon, authenticated;
 

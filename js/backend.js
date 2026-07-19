@@ -152,10 +152,10 @@ const Account = (() => {
     return { ok: true };
   }
 
-  // 시간제한 모드 플레이 기록 저장 (연속 모드는 호출하지 않음)
-  async function savePlay({ score, region, mode, rankMode, modeLabel, duration, theoreticalMax }) {
+  // 시간제한/거꾸로 모드 플레이 기록 저장 (연속 모드는 호출하지 않음)
+  async function savePlay({ score, region, mode, rankMode, modeLabel, duration, theoreticalMax, playVariant = "normal" }) {
     if (!client || !session) return false;
-    const { error } = await client.from("plays").insert({
+    const payload = {
       user_id: session.user.id,
       score,
       region: region || "seoul",
@@ -164,7 +164,11 @@ const Account = (() => {
       mode_label: modeLabel,
       duration_sec: duration,
       theoretical_max: theoreticalMax,
-    });
+    };
+    // 일반 모드는 마이그레이션 전 DB에서도 계속 저장되도록 기본값에 맡긴다.
+    // 거꾸로 기록만 새 컬럼을 명시해 일반 랭킹과 절대 섞이지 않게 한다.
+    if (playVariant === "reverse") payload.play_variant = "reverse";
+    const { error } = await client.from("plays").insert(payload);
     if (error) { console.warn("[Account] 기록 저장 실패", error.message); return false; }
     return true;
   }
@@ -172,12 +176,22 @@ const Account = (() => {
   // 내 플레이 기록 가져오기 (마이페이지)
   async function myPlays(limit = 50) {
     if (!client || !session) return [];
-    const { data, error } = await client
+    let { data, error } = await client
       .from("plays")
-      .select("score, region, mode, mode_label, duration_sec, created_at")
+      .select("score, region, mode, mode_label, duration_sec, play_variant, created_at")
       .eq("user_id", session.user.id)
       .order("created_at", { ascending: false })
       .limit(limit);
+    // reverse-mode.sql 적용 전에도 마이페이지의 기존 기록은 볼 수 있게 한다.
+    if (error && /play_variant|column/i.test(error.message || "")) {
+      ({ data, error } = await client
+        .from("plays")
+        .select("score, region, mode, mode_label, duration_sec, created_at")
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false })
+        .limit(limit));
+      if (!error) data = (data || []).map(row => ({ ...row, play_variant: "normal" }));
+    }
     if (error) { console.warn("[Account] 기록 조회 실패", error.message); return []; }
     return data || [];
   }
@@ -187,22 +201,34 @@ const Account = (() => {
     const plays = await myPlays(500);
     const best = {};
     for (const p of plays) {
-      const key = `${p.region || "seoul"}:${p.mode}:${p.duration_sec || 60}`;
+      const key = `${p.region || "seoul"}:${p.mode}:${p.duration_sec || 60}:${p.play_variant || "normal"}`;
       if (best[key] === undefined || p.score > best[key]) best[key] = p.score;
     }
     return best; // { "seoul:core:60": 23, "busan:all:30": 12, ... } 형태
   }
 
-  // 역대 랭킹 (지역+노선 범위+제한시간별)
-  async function allTimeRanking(mode, duration, limit = 100) {
+  // 역대 랭킹 (지역+노선 범위+제한시간+플레이 방식별)
+  async function allTimeRanking(mode, duration, limit = 100, variant = "normal") {
     if (!client) {
       return { rows: [], error: "Supabase에 연결되지 않았습니다." };
     }
-    const { data, error } = await client.rpc("all_time_ranking_by_duration", {
+    let { data, error } = await client.rpc("all_time_ranking_by_duration_variant", {
       p_mode: mode,
       p_duration: duration,
+      p_variant: variant,
       p_limit: limit,
     });
+    // DB 마이그레이션 전에는 일반 랭킹만 기존 RPC로 안전하게 폴백한다.
+    if (error && variant === "normal" && (
+      error.code === "PGRST202" || error.code === "42883" ||
+      /all_time_ranking_by_duration_variant|function.*does not exist|schema cache/i.test(error.message || "")
+    )) {
+      ({ data, error } = await client.rpc("all_time_ranking_by_duration", {
+        p_mode: mode,
+        p_duration: duration,
+        p_limit: limit,
+      }));
+    }
     if (error) {
       const message = error.message || "알 수 없는 오류";
       console.warn("[Account] 랭킹 조회 실패", message);

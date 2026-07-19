@@ -22,7 +22,7 @@ assert.match(game, /duration: State\.gameDuration/);
 assert.match(game, /const REVEAL_DELAY = 500/);
 assert.match(game, /theoreticalMax: theoreticalMaxScore/);
 assert.doesNotMatch(accountUi, /if \(duration !== 60\) return/);
-assert.match(accountUi, /Account\.allTimeRanking\(rankKey, requestedDuration, 100\)/);
+assert.match(accountUi, /Account\.allTimeRanking\(rankKey, requestedDuration, 100, requestedVariant\)/);
 assert.match(accountUi, /const loadRevision = \+\+rankLoadRevision/);
 assert.match(accountUi, /if \(loadRevision !== rankLoadRevision\) return/);
 assert.match(accountUi, /if \(result\.error\)/);
@@ -36,7 +36,7 @@ const migration = fs.readFileSync(path.join(root, "supabase", "time-based-rankin
 assert.match(backend, /duration_sec: duration/);
 assert.match(backend, /theoretical_max: theoreticalMax/);
 assert.match(backend, /all_time_ranking_by_duration/);
-assert.match(backend, /allTimeRanking\(mode, duration, limit = 100\)/);
+assert.match(backend, /allTimeRanking\(mode, duration, limit = 100, variant = "normal"\)/);
 assert.match(backend, /return \{ rows: data \|\| \[\], error: null \}/);
 assert.doesNotMatch(backend, /nextResetText|weeklyRanking/);
 assert.match(migration, /duration_sec in \(60, 120, 300\)/);

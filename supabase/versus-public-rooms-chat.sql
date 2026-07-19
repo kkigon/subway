@@ -104,13 +104,16 @@ as $$
    limit 1;
 $$;
 
-create or replace function public.room_list_public(p_limit integer default 30)
+-- 반환 컬럼(play_mode)이 추가되므로 기존 시그니처를 먼저 제거한다.
+drop function if exists public.room_list_public(integer);
+create function public.room_list_public(p_limit integer default 30)
 returns table (
   code text,
   room_title text,
   host_name text,
   region text,
   mode text,
+  play_mode text,
   duration_sec integer,
   status text,
   member_count integer,
@@ -122,7 +125,7 @@ set search_path = ''
 stable
 as $$
   select rooms.code, rooms.room_title, rooms.host_name, rooms.region, rooms.mode,
-         rooms.duration_sec, rooms.status, rooms.member_count, rooms.created_at
+         rooms.play_mode, rooms.duration_sec, rooms.status, rooms.member_count, rooms.created_at
     from public.rooms
    where rooms.is_public = true
      and rooms.status = 'waiting'

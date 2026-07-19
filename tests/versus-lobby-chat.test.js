@@ -19,6 +19,8 @@ assert.match(ui, /setTimeout\(async \(\) =>[\s\S]*Versus\.updateSettings/);
 assert.match(versus, /rpc\("room_create_v2"/);
 assert.match(versus, /rpc\("room_list_public"/);
 assert.match(versus, /rpc\("room_get"/);
+assert.match(migration, /play_mode text/);
+assert.match(ui, /room\.play_mode === "reverse"/);
 assert.doesNotMatch(versus, /from\("rooms"\)\.select\("\*"\)/);
 
 // 채팅, 필터링, 신고 UI 및 서버 RPC

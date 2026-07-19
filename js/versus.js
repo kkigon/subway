@@ -752,6 +752,7 @@ const Versus = (() => {
       region: row.region,
       lineIds: row.line_ids || [],
       duration: row.duration_sec,
+      playMode: Room.data?.play_mode === "reverse" ? "reverse" : "timed",
       playAt: ms(row.play_at),
       qEndsAt: ms(row.q_ends_at),
       gameEndsAt: ms(row.game_ends_at),
@@ -805,7 +806,8 @@ const Versus = (() => {
         registerSelf();   // 내 이름/색을 DB names에 등록(나가도 순위에 남게)
         const cfg = {
           region: snap.region, mode: "all", lineIds: snap.lineIds,
-          duration: snap.duration, order: snap.order, playAt: snap.playAt,
+          duration: snap.duration, playMode: snap.playMode,
+          order: snap.order, playAt: snap.playAt,
         };
         gameStartListeners.forEach(fn => { try { fn(cfg); } catch (e) {} });
       }
@@ -927,6 +929,12 @@ const Versus = (() => {
     const mode = settings.mode || "all";
     const customLines = settings.customLines || [];
     const duration = GAME_DURATIONS.includes(Number(settings.duration)) ? Number(settings.duration) : 60;
+    const playMode = settings.playMode === "reverse" ? "reverse" : "timed";
+
+    // 디바운스 저장이 아직 대기 중이어도 시작 직전에 방 설정을 확정한다.
+    // 참가자들은 rooms Realtime 행의 play_mode를 받아 같은 판정 규칙으로 시작한다.
+    const settingsResult = await updateSettings({ region, mode, customLines, duration, playMode });
+    if (!settingsResult.ok) return { ok: false, message: settingsResult.message || "방 설정을 저장하지 못했어요." };
 
     const lineIds = window.VersusGame.resolveLineIds(region, mode, customLines);
     if (!lineIds || lineIds.length === 0) return { ok: false, message: "노선을 선택해주세요." };

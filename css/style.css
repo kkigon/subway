@@ -368,10 +368,10 @@ body {
   outline: 3px solid rgba(0, 82, 164, .4); outline-offset: 2px;
 }
 
-/* 플레이 모드 선택 (1분 도전 / 연속 모드) */
+/* 플레이 모드 선택 (시간 도전 / 연속 / 거꾸로) */
 .play-mode-select {
   border: none; padding: 0;
-  display: grid; grid-template-columns: repeat(2, 1fr);
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px; margin-bottom: 16px;
 }
 .play-mode-option { position: relative; }
@@ -391,6 +391,47 @@ body {
 }
 .play-mode-option input:focus-visible + .play-mode-card {
   outline: 3px solid rgba(0, 168, 77, .4); outline-offset: 2px;
+}
+
+.play-mode-card--reverse {
+  position: relative;
+  background: linear-gradient(120deg, rgba(255, 80, 80, .10), rgba(255, 197, 61, .12), rgba(59, 201, 114, .10), rgba(61, 146, 255, .11), rgba(160, 78, 255, .11), rgba(255, 80, 151, .10));
+  background-size: 260% 260%;
+  animation: reverse-rainbow-glow 3.2s linear infinite;
+}
+.play-mode-option--reverse input:checked + .play-mode-card--reverse {
+  background: linear-gradient(120deg, rgba(255, 80, 80, .18), rgba(255, 197, 61, .20), rgba(59, 201, 114, .17), rgba(61, 146, 255, .18), rgba(160, 78, 255, .18), rgba(255, 80, 151, .17));
+  background-size: 260% 260%;
+}
+.play-mode-new {
+  position: absolute; top: -10px; right: -7px; z-index: 2;
+  color: #e11935; background: #fff; border: 1.5px solid currentColor;
+  border-radius: 999px; padding: 2px 6px;
+  font-size: 9px; font-weight: 950; letter-spacing: .04em; line-height: 1.2;
+  transform: rotate(5deg);
+  box-shadow: 0 2px 8px rgba(225, 25, 53, .20);
+}
+.reverse-word {
+  display: inline-block;
+  transform: rotate(180deg);
+  transform-origin: center;
+}
+@keyframes reverse-rainbow-glow {
+  0% { border-color: #ff5263; box-shadow: 0 0 10px rgba(255, 82, 99, .32); background-position: 0% 50%; }
+  20% { border-color: #f4b52f; box-shadow: 0 0 11px rgba(244, 181, 47, .32); }
+  40% { border-color: #2fbd75; box-shadow: 0 0 11px rgba(47, 189, 117, .32); }
+  60% { border-color: #3d8fff; box-shadow: 0 0 11px rgba(61, 143, 255, .34); }
+  80% { border-color: #a14eff; box-shadow: 0 0 11px rgba(161, 78, 255, .34); }
+  100% { border-color: #ff5263; box-shadow: 0 0 10px rgba(255, 82, 99, .32); background-position: 100% 50%; }
+}
+
+.reverse-mode #answer-panel {
+  border-color: #7c4dff;
+  box-shadow: 0 12px 38px rgba(124, 77, 255, .24);
+}
+.reverse-mode #answer-input:focus {
+  border-color: #7c4dff;
+  box-shadow: 0 0 0 4px rgba(124, 77, 255, .15);
 }
 
 .game-duration-setting {
@@ -552,9 +593,10 @@ body {
   .mode-card strong { font-size: 14px; }
   .mode-card small { display: none; }
   .play-mode-select { gap: 7px; margin-bottom: 14px; }
-  .play-mode-card { padding: 11px 8px; border-radius: 13px; }
-  .play-mode-card strong { font-size: 14px; }
-  .play-mode-card small { font-size: 10.5px; }
+  .play-mode-card { padding: 11px 5px; border-radius: 13px; }
+  .play-mode-card strong { font-size: 13px; }
+  .play-mode-card small { font-size: 9.5px; line-height: 1.25; }
+  .play-mode-new { top: -9px; right: -5px; font-size: 8px; padding: 2px 5px; }
   .game-duration-setting { padding: 9px; margin-bottom: 14px; }
   .game-duration-options { gap: 4px; }
   .game-duration-btn { padding: 7px 1px; font-size: 11.5px; }
@@ -758,6 +800,39 @@ body.modal-open { overflow: hidden; }
 
 /* ---------------- 랭킹 ---------------- */
 .rank-tabs { display: flex; gap: 8px; margin-bottom: 10px; }
+.rank-variant-control {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 2px 0 12px; padding: 10px 12px;
+  border: 1.5px solid #e2e5eb; border-radius: 14px;
+  background: linear-gradient(120deg, rgba(255, 82, 99, .06), rgba(61, 143, 255, .07), rgba(161, 78, 255, .07));
+}
+.rank-variant-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; text-align: left; }
+.rank-variant-copy strong { font-size: 13.5px; }
+.rank-variant-copy small { font-size: 10.5px; color: var(--ink-soft); }
+.rank-reverse-toggle {
+  position: relative; flex: none; min-width: 76px; height: 36px; padding: 3px 9px 3px 36px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 2px solid #cfd4dd; border-radius: 999px; background: #edf0f4; color: #707786;
+  font: inherit; font-size: 10px; font-weight: 900; cursor: pointer;
+  transition: background .2s, border-color .2s, color .2s, box-shadow .2s;
+}
+.rank-reverse-knob {
+  position: absolute; left: 4px; top: 3px;
+  width: 26px; height: 26px; border-radius: 50%; background: #fff;
+  box-shadow: 0 2px 7px rgba(0, 0, 0, .18); transition: transform .25s var(--ease);
+}
+.rank-reverse-toggle[aria-checked="true"] {
+  padding: 3px 36px 3px 9px;
+  color: #fff; border-color: #8b4dff;
+  background: linear-gradient(110deg, #ff536b, #f6b735, #2fbd75, #3d8fff, #9a4fff);
+  background-size: 240% 100%; box-shadow: 0 0 15px rgba(124, 77, 255, .28);
+  animation: rank-reverse-rainbow 3s linear infinite;
+}
+.rank-reverse-toggle[aria-checked="true"] .rank-reverse-knob { transform: translateX(40px); }
+@keyframes rank-reverse-rainbow {
+  from { background-position: 0% 50%; }
+  to { background-position: 100% 50%; }
+}
 .rank-tab {
   flex: 1; font: inherit; font-size: 14px; font-weight: 800;
   background: #f3f4f7; color: var(--ink-soft); border: none; border-radius: 12px;
@@ -825,6 +900,7 @@ body.modal-open { overflow: hidden; }
 }
 @media (prefers-reduced-motion: reduce) {
   .rank-row.score-exceptional::after { animation: none; display: none; }
+  .play-mode-card--reverse, .rank-reverse-toggle[aria-checked="true"] { animation: none; }
 }
 
 /* ---------------- 마이페이지 ---------------- */

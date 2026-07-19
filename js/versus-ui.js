@@ -66,7 +66,7 @@
     if (typeof goHome === "function") {
       try { goHome(); } catch (e) {}
     } else {
-      document.body.classList.remove("in-game", "at-end", "studying", "endless-mode");
+      document.body.classList.remove("in-game", "at-end", "studying", "endless-mode", "reverse-mode");
       document.body.classList.add("at-home");
     }
   }
@@ -157,6 +157,7 @@
             <span>👑 ${escapeHtml(room.host_name)}</span>
             <span>📍 ${escapeHtml(region)}</span>
             <span>${escapeHtml(roomModeLabel(room))}</span>
+            <span>${room.play_mode === "reverse" ? "🙃 거꾸로" : "⏱ 시간 도전"}</span>
             <span>⏱ ${Number(room.duration_sec) || 60}초</span>
             <span>👥 ${Math.max(1, Number(room.member_count) || 1)}명</span>
           </div>
@@ -257,7 +258,7 @@
       const result = await Versus.updateSettings({
         region: vsSettings.region, mode: vsSettings.mode,
         customLines: vsSettings.customLines, duration: vsSettings.duration,
-        playMode: "timed",
+        playMode: vsSettings.playMode,
       });
       if (!result.ok) console.warn("[VersusUI] 방 설정 저장 실패", result.message || "unknown");
     }, 250);
@@ -269,6 +270,7 @@
     vsSettings.region = data.region || "seoul";
     vsSettings.mode = ["core", "all", "custom"].includes(data.mode) ? data.mode : "all";
     vsSettings.duration = allowedDurations.includes(Number(data.duration_sec)) ? Number(data.duration_sec) : 60;
+    vsSettings.playMode = data.play_mode === "reverse" ? "reverse" : "timed";
     vsSettings.customLines = String(data.custom_lines || "").split(",").filter(Boolean);
     document.querySelectorAll("#vs-set-region .vs-seg-btn").forEach(button =>
       button.classList.toggle("active", button.dataset.region === vsSettings.region));
@@ -276,6 +278,8 @@
       button.classList.toggle("active", button.dataset.mode === vsSettings.mode));
     document.querySelectorAll("#vs-set-duration .vs-seg-btn").forEach(button =>
       button.classList.toggle("active", Number(button.dataset.dur) === vsSettings.duration));
+    document.querySelectorAll("#vs-set-play-mode .vs-seg-btn").forEach(button =>
+      button.classList.toggle("active", button.dataset.playMode === vsSettings.playMode));
   }
 
   // 세그먼트 버튼(지역/노선/시간) 한 그룹 처리
@@ -345,6 +349,7 @@
     settingsWired = true;
     wireSeg("#vs-set-region", (btn) => { vsSettings.region = btn.dataset.region; syncRegionUI(); queueSettingsSave(); });
     wireSeg("#vs-set-mode", (btn) => { vsSettings.mode = btn.dataset.mode; updateCustomVisibility(); queueSettingsSave(); });
+    wireSeg("#vs-set-play-mode", (btn) => { vsSettings.playMode = btn.dataset.playMode === "reverse" ? "reverse" : "timed"; queueSettingsSave(); });
     wireSeg("#vs-set-duration", (btn) => { vsSettings.duration = parseInt(btn.dataset.dur, 10) || 60; queueSettingsSave(); });
     $("#vs-start-btn")?.addEventListener("click", doStartGame);
   }
@@ -359,7 +364,7 @@
     const res = await Versus.startGame({
       region: vsSettings.region, mode: vsSettings.mode,
       customLines: vsSettings.customLines, duration: vsSettings.duration,
-      playMode: "timed",
+      playMode: vsSettings.playMode,
     });
     btn.disabled = false; btn.textContent = "게임 시작";
     if (!res.ok) alert(res.message || "시작에 실패했어요.");
@@ -442,7 +447,7 @@
   // 대기실로 복귀 (모두)
   function backToLobbyUI() {
     // 게임/엔딩 상태 정리하고 대기실 표시
-    document.body.classList.remove("in-game", "at-end", "versus-mode");
+    document.body.classList.remove("in-game", "at-end", "versus-mode", "reverse-mode");
     const sb = $("#vs-scoreboard"); if (sb) sb.classList.remove("show");
     enterLobby();
   }

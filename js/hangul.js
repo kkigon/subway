@@ -45,6 +45,35 @@ function matchesAnswer(input, displayName) {
   return nameAliases(displayName).includes(n);
 }
 
+// 유니코드 코드포인트 단위로 문자열을 뒤집는다.
+// 한글 음절과 이모지의 surrogate pair가 깨지지 않도록 split("") 대신 전개 연산자를 쓴다.
+function reverseText(str) {
+  return [...String(str || "")].reverse().join("");
+}
+
+// 거꾸로 모드에서 허용할 표시명/별칭 후보.
+// 예) "총신대입구(이수)" → [")수이(구입대신총", "구입대신총", "수이"]
+function reverseNameCandidates(displayName) {
+  const candidates = new Set([displayName]);
+  const m = String(displayName || "").match(/^(.+?)\((.+?)\)$/);
+  if (m) { candidates.add(m[1]); candidates.add(m[2]); }
+  return [...candidates].map(reverseText);
+}
+
+// 자동완성/정답 공개용 표시명. 괄호까지 통째로 뒤집지 않고 각 이름만 뒤집어 읽기 쉽게 보인다.
+// 예) "총신대입구(이수)" → "구입대신총 (수이)"
+function reverseDisplayName(displayName) {
+  const name = String(displayName || "");
+  const m = name.match(/^(.+?)\((.+?)\)$/);
+  return m ? `${reverseText(m[1])} (${reverseText(m[2])})` : reverseText(name);
+}
+
+function matchesReverseAnswer(input, displayName) {
+  const n = normalizeName(input);
+  if (!n) return false;
+  return reverseNameCandidates(displayName).some(candidate => normalizeName(candidate) === n);
+}
+
 // 검색 점수: 정확(3) > 접두(2) > 포함(1) > 초성 접두(0.5) / 불일치(-1)
 // 괄호 별칭(예: "총신대입구(이수)"의 "이수")도 후보로 함께 평가해 최고점을 사용
 function searchScore(query, displayName) {
@@ -71,4 +100,9 @@ function searchScore(query, displayName) {
     if (score > best) best = score;
   }
   return best;
+}
+
+// 거꾸로 표시명과 거꾸로 별칭을 모두 검색 대상으로 삼는다.
+function reverseSearchScore(query, displayName) {
+  return Math.max(...reverseNameCandidates(displayName).map(candidate => searchScore(query, candidate)));
 }

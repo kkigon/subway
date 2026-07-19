@@ -29,6 +29,11 @@ alter table public.rooms drop constraint if exists rooms_duration_sec_check;
 alter table public.rooms add constraint rooms_duration_sec_check
   check (duration_sec in (60, 120, 300));
 
+update public.rooms set play_mode = 'timed' where play_mode not in ('timed', 'endless', 'reverse');
+alter table public.rooms drop constraint if exists rooms_play_mode_check;
+alter table public.rooms add constraint rooms_play_mode_check
+  check (play_mode in ('timed', 'endless', 'reverse'));
+
 create or replace function public.room_create(
   p_code text,
   p_host text,
@@ -88,7 +93,7 @@ declare
 begin
   if p_region not in ('seoul', 'nationwide', 'busan', 'daegu', 'daejeon', 'gwangju')
      or p_mode not in ('core', 'all', 'custom')
-     or p_play_mode not in ('timed', 'endless')
+     or p_play_mode not in ('timed', 'endless', 'reverse')
      or p_duration not in (60, 120, 300) then
     raise exception 'invalid room settings' using errcode = '22023';
   end if;

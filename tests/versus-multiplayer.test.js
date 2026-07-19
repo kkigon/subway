@@ -107,6 +107,20 @@ function makeClient(db, hub) {
           error: null,
         };
       }
+      if (name === "room_update_settings") {
+        const current = db.rooms.get(args.p_room);
+        if (!current || current.host_id !== args.p_host) {
+          return { data: null, error: { code: "42501", message: "only host" } };
+        }
+        Object.assign(current, {
+          region: args.p_region,
+          mode: args.p_mode,
+          custom_lines: args.p_custom_lines,
+          duration_sec: args.p_duration,
+          play_mode: args.p_play_mode,
+        });
+        return { data: { ...current }, error: null };
+      }
       if (name === "room_heartbeat") {
         const current = db.rooms.get(args.p_room);
         if (current?.host_id === args.p_host) current.member_count = args.p_member_count;
@@ -211,6 +225,12 @@ async function flush() {
   assert.equal(created.ok, true);
   assert.equal(db.rooms.get(created.code).duration_sec, 60);
   assert.equal(db.rooms.get(created.code).room_title, "철도인 대전방");
+  const reverseSettings = await first.Versus.updateSettings({
+    region: "seoul", mode: "all", customLines: [], duration: 120, playMode: "reverse",
+  });
+  assert.equal(reverseSettings.ok, true);
+  assert.equal(db.rooms.get(created.code).play_mode, "reverse");
+  assert.equal(first.Versus.Room.data.play_mode, "reverse");
   assert.equal((await second.Versus.listPublicRooms()).rooms.length, 1);
 
   const privateHost = makeBrowser(db, hub, "비공개방장");

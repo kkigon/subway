@@ -138,6 +138,14 @@
             <small>틀리면 끝! 최대 연속 기록</small>
           </span>
         </label>
+        <label class="play-mode-option play-mode-option--reverse">
+          <input type="radio" name="playmode" value="reverse">
+          <span class="play-mode-card play-mode-card--reverse">
+            <span class="play-mode-new" aria-label="새로운 모드">NEW!</span>
+            <strong>🙃 <span class="reverse-word">거꾸로</span></strong>
+            <small>역 이름을 뒤집어 입력하기</small>
+          </span>
+        </label>
       </fieldset>
 
       <div id="game-duration-setting" class="game-duration-setting">
@@ -289,6 +297,14 @@
         <div id="vs-custom-lines" class="vs-custom-lines"></div>
 
         <div class="vs-setting-row">
+          <span class="vs-setting-label">방식</span>
+          <div class="vs-seg" id="vs-set-play-mode">
+            <button type="button" class="vs-seg-btn active" data-play-mode="timed">⏱️ 시간 도전</button>
+            <button type="button" class="vs-seg-btn vs-reverse-mode-btn" data-play-mode="reverse">🙃 거꾸로</button>
+          </div>
+        </div>
+
+        <div class="vs-setting-row">
           <span class="vs-setting-label">시간</span>
           <div class="vs-seg" id="vs-set-duration">
             <button type="button" class="vs-seg-btn active" data-dur="60">60초</button>
@@ -366,6 +382,16 @@
     <div class="modal-card">
       <button class="modal-x" type="button" data-close-modal="ranking-modal" aria-label="닫기">✕</button>
       <h2 class="modal-title">🏆 역대 랭킹</h2>
+      <div class="rank-variant-control">
+        <div class="rank-variant-copy">
+          <strong>🙃 거꾸로 모드 랭킹</strong>
+          <small>스위치를 켜면 거꾸로 기록만 보여요</small>
+        </div>
+        <button id="rank-reverse-toggle" class="rank-reverse-toggle" type="button" role="switch" aria-checked="false">
+          <span class="rank-reverse-knob"></span>
+          <span id="rank-reverse-status">OFF</span>
+        </button>
+      </div>
       <div class="rank-region-tabs">
         <button class="rank-region-tab active" type="button" data-region="seoul">수도권</button>
         <button class="rank-region-tab" type="button" data-region="busan">부산</button>
@@ -383,7 +409,7 @@
         <button class="rank-duration-tab" type="button" data-duration="120">120초</button>
         <button class="rank-duration-tab" type="button" data-duration="300">300초</button>
       </div>
-      <p class="rank-note">⏱️ 제한 시간별 최고 기록 상위 100명을 집계해요</p>
+      <p id="rank-note" class="rank-note">⏱️ 일반 모드의 제한 시간별 최고 기록 상위 100위를 집계해요</p>
       <div id="ranking-body" class="rank-body"></div>
     </div>
   </div>

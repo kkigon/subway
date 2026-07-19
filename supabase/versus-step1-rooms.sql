@@ -15,6 +15,7 @@ create table if not exists public.rooms (
   mode         text not null default 'all',       -- 'core' | 'all' | 'custom'
   custom_lines text,                              -- 커스텀일 때 노선 id들(콤마구분), 아니면 null
   duration_sec integer not null default 60,       -- 60 | 120 | 300
+  play_mode    text not null default 'timed',     -- 'timed' | 'reverse'
   status       text not null default 'waiting',   -- 'waiting' | 'playing' | 'ended'
   room_title   text not null default '지하철 대전방',
   is_public    boolean not null default true,
@@ -22,6 +23,7 @@ create table if not exists public.rooms (
   last_active_at timestamptz not null default now(),
   created_at   timestamptz not null default now(),
   constraint rooms_duration_sec_check check (duration_sec in (60, 120, 300)),
+  constraint rooms_play_mode_check check (play_mode in ('timed', 'endless', 'reverse')),
   constraint rooms_title_length_check check (char_length(room_title) between 2 and 30),
   constraint rooms_member_count_check check (member_count between 1 and 32)
 );
