@@ -1,0 +1,5 @@
+# Red team audit output — kept local, not tracked
+RED_TEAM_FINDINGS.md
+
+# graphify knowledge-graph output — generated, regeneratable
+graphify-out/

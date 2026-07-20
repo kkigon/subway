@@ -239,6 +239,12 @@ const SubwayMap = (() => {
 
   function fitAll(instant = false) {
     const b = network.bounds;
+    // 빈 네트워크(선택 노선이 데이터에 하나도 없음 → 좌표가 ±Infinity)나 좌표에 NaN이
+    // 섞이면 viewBox가 "NaN…"이 되어 지도가 통째로 사라진다. 네 경계 모두 검사해 기본 뷰로 복귀.
+    if (!b || ![b.minX, b.maxX, b.minY, b.maxY].every(Number.isFinite)) {
+      jumpTo({ x: 0, y: 0, w: 1000, h: 1000 });
+      return;
+    }
     const pad = 80;
     const mapW = (b.maxX - b.minX) + pad * 2;
     const mapH = (b.maxY - b.minY) + pad * 2;

@@ -21,10 +21,13 @@ const Account = (() => {
            SUPABASE_ANON_KEY.length > 20;
   }
 
-  function notify() { listeners.forEach(fn => { try { fn(); } catch (e) {} }); }
+  // 스냅샷(slice) 위에서 순회한다. 구독자가 콜백 안에서 offChange로 자기 자신을 제거하면
+  // (ensureAccountReady의 one-shot 핸들러) 원본 배열이 iteration 중 splice돼 다음 리스너를 건너뛴다.
+  function notify() { listeners.slice().forEach(fn => { try { fn(); } catch (e) {} }); }
 
   // 외부에서 로그인 상태 변화를 구독
   function onChange(fn) { listeners.push(fn); }
+  function offChange(fn) { const i = listeners.indexOf(fn); if (i >= 0) listeners.splice(i, 1); }
 
   async function init() {
     if (!configured()) {
@@ -238,7 +241,7 @@ const Account = (() => {
   }
 
   return {
-    init, onChange,
+    init, onChange, offChange,
     isConfigured: configured,
     isReady: () => ready,
     isAvailable: () => available,

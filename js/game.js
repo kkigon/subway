@@ -7,7 +7,7 @@ const HINTS_PER_GAME = 3;
 const REVEAL_DELAY = 500; // 정답 공개 후 다음 문제로 넘어가는 시간(ms)
 const SUGGEST_LIMIT = 50; // 자동완성에 한 번에 보여줄 최대 추천 개수 (이 이상은 스크롤)
 
-const $ = sel => document.querySelector(sel);
+// $ / escapeHtml / lineColor 는 util.js(전역)에서 제공된다.
 
 const State = {
   region: "seoul",       // REGION_LABELS의 지역 코드
@@ -166,6 +166,7 @@ function updateStartButton() {
 
 /* ---------------- 게임 시작 ---------------- */
 function startGame() {
+  if (State.playing) return;   // 중복 시작(Start/Retry 더블클릭) 방지 — 두 번째 문제/타이머 방지
   const ids = selectedLineIds();
   if (ids.length === 0) return;
 
@@ -191,6 +192,7 @@ function startGame() {
 
   // 노선도가 선명해진 뒤 첫 문제로 줌인
   setTimeout(() => {
+    if (!State.playing) return;   // 700ms 내 홈 이탈 시 지도 상호작용/포커스가 홈 화면에 새는 것 방지
     nextQuestion();
     if (isTimedMode()) {
       State.endAt = performance.now() + State.gameDuration * 1000;
@@ -233,8 +235,14 @@ function startVersusGame(config) {
   SubwayMap.render(State.network);
 
   const validKeys = new Set(State.network.quizStations.keys());
-  let order = Array.isArray(config.order) ? config.order.filter(k => validKeys.has(k)) : null;
-  if (!order || order.length === 0) order = shuffle([...validKeys]);
+  // host의 order를 그대로 유지한다. 예전엔 validKeys로 filter했는데, 데이터 버전이
+  // 어긋나면(예: 역 이름 변경 + WebView 캐시) 알 수 없는 키가 빠지며 뒤 인덱스가
+  // 전부 밀려 host가 채점하는 역과 다른 역이 표시됐다. 인덱스 정합을 위해 압축하지 않는다.
+  let order = Array.isArray(config.order) && config.order.length ? config.order.slice() : null;
+  if (!order) order = shuffle([...validKeys]);
+  if (order.some(k => !validKeys.has(k))) {
+    console.warn("[versus] 문제 순서에 이 클라이언트가 모르는 역이 있습니다. 데이터 버전 불일치 가능.");
+  }
   State.vsOrder = order;
   State.vsIndex = -1;          // 아직 첫 문제 표시 전
   State.vsScores = {};
@@ -242,6 +250,7 @@ function startVersusGame(config) {
   State.vsPhase = "countdown";
   State.score = 0;
   // ★ 이전 게임 잔재 리셋(안 하면 두 번째 게임이 종료/진행이 안 됨)
+  State.current = null;        // 이전 라운드 역 키가 남으면 카운트다운 힌트가 그 역을 노출/힌트 낭비
   State._vsEnded = false;
   State._revealedIndex = null;
   State.answeredThisQ = false;
@@ -373,19 +382,22 @@ function applyVersusState(snap) {
 
   // 정답 공개(reveal) 상태 반영
   if (snap.phase === "reveal" && State.current) {
-    if (!State._revealedIndex || State._revealedIndex !== snap.index) {
+    // index 0에서도 재공개를 막기 위해 !_revealedIndex(=!0은 truthy) 대신 순수 비교만 사용.
+    if (State._revealedIndex !== snap.index) {
       State._revealedIndex = snap.index;
       const st = State.network.stations.get(State.current);
+      const stName = st ? st.name : State.current;   // 데이터 불일치로 역을 못 찾아도 crash 대신 키 표시
       $("#answer-input").disabled = true;
+      $("#btn-hint").disabled = true;   // 공개 중엔 힌트 비활성(이미 공개된 역에 힌트 낭비 방지); 다음 문제에서 재활성
       clearSuggestions();
       if (snap.winnerId) {
         SubwayMap.revealLabel(State.current, true);
         Sound.play("correct");
-        popFeedback(`⭕ ${snap.winnerName} 정답! 「${answerDisplayName(st.name)}」`, "ok");
+        popFeedback(`⭕ ${snap.winnerName} 정답! 「${answerDisplayName(stName)}」`, "ok");
       } else {
         SubwayMap.revealLabel(State.current, false);
         Sound.play("wrong");
-        popFeedback(`⏱️ 시간 초과! 정답은 「${answerDisplayName(st.name)}」`, "no");
+        popFeedback(`⏱️ 시간 초과! 정답은 「${answerDisplayName(stName)}」`, "no");
       }
     }
   } else if (snap.phase === "playing") {
@@ -468,6 +480,7 @@ function submitVersusAnswer() {
   const value = input.value.trim();
   if (!value) return;
   const st = State.network.stations.get(State.current);
+  if (!st) return;   // 데이터 버전 불일치로 이 클라이언트가 모르는 역이면 제출 무시(crash 방지)
   const correct = matchesCurrentAnswer(value, st.name);
 
   if (!correct) {
@@ -480,6 +493,7 @@ function submitVersusAnswer() {
   if (State.answeredThisQ) return;
   State.answeredThisQ = true;
   input.value = "";
+  clearSuggestions();   // 프로그램적 value=""는 input 이벤트를 안 내므로 추천창을 직접 닫는다
   popFeedback("✅ 제출!", "ok");
   if (typeof Versus !== "undefined" && Versus.setTyping) { try { Versus.setTyping(false); } catch (e) {} }
   if (typeof Versus !== "undefined" && Versus.sendAnswer) { try { Versus.sendAnswer(State.vsIndex); } catch (e) {} }
@@ -571,9 +585,12 @@ function submitAnswer() {
     return;
   }
 
-  const remain = State.endAt - performance.now();
+  // 남은 시간은 공개(REVEAL_DELAY)가 끝나는 시점에 다시 계산한다.
+  // 제출 시점의 값을 캡처해두면, 공개 도중 0:00을 지나도 낡은 값으로 다음 문제를
+  // 내주어 시간 초과 후 무제한 보너스 문제가 생기고(점수 부풀림) 타이머 루프가
+  // 죽어 게임이 멈춘다.
   setTimeout(() => {
-    if (remain <= 0) { endGame(); return; }
+    if (State.endAt - performance.now() <= 0) { endGame(); return; }
     nextQuestion();
   }, REVEAL_DELAY);
 }
@@ -588,12 +605,15 @@ function popFeedback(text, kind) {
 /* ---------------- 힌트 ---------------- */
 function useHint() {
   if (!State.playing || State.awaitingNext || State.hintsLeft <= 0) return;
+  if (State.versus && State.vsPhase !== "playing") return;   // 카운트다운/공개 중엔 힌트 금지(키보드로 접근 시 낭비 방지)
+  // 역을 못 찾으면 힌트를 소모하기 전에 중단한다(데이터 불일치 시 힌트 낭비 + crash 방지).
+  const st = State.current && State.network.stations.get(State.current);
+  if (!st) return;
   State.hintsLeft--;
   $("#hint-count").textContent = State.hintsLeft;
   if (State.hintsLeft === 0) $("#btn-hint").disabled = true;
 
-  const st = State.network.stations.get(State.current);
-  const originalBase = st.name.replace(/\(.+?\)$/, ""); // 괄호 별칭 제외
+  const originalBase = st.name.replace(/\(.+?\)$/, ""); // 괄호 별칭 제외 (st는 위 가드에서 이미 조회)
   const base = isReverseMode() ? reverseText(originalBase) : originalBase;
   $("#hint-chars").textContent = toChosung(base).split("").join(" ");
   $("#hint-display").classList.add("show");
@@ -660,6 +680,7 @@ function clearSuggestions() {
 
 /* ---------------- 종료 & 공유 (싱글플레이 전용; 대전은 endVersusFromState) ---------------- */
 function endGame() {
+  if (!State.playing) return;  // 중복 종료 방지 → onPlayFinished/savePlay 이중 호출(기록 중복 저장) 차단
   State.playing = false;
   cancelAnimationFrame(State.timerFrame);
   const qb = $("#vs-qtimer"); if (qb) qb.classList.remove("show");
@@ -684,8 +705,9 @@ function endGame() {
   document.body.classList.add("at-end");
 
   // 백엔드 기록 저장 (시간제한 모드 + 로그인 상태일 때만; 훅이 내부 판단)
+  // 저장 실패(error)는 이전엔 조용히 삼켜져 사용자가 랭킹 누락을 알 수 없었다 → 토스트로 알림.
   if (typeof window.onPlayFinished === "function") {
-    window.onPlayFinished({
+    Promise.resolve(window.onPlayFinished({
       score: State.score,
       region: State.region,
       mode: State.mode,
@@ -697,7 +719,9 @@ function endGame() {
         State.network?.quizStations?.size || 1,
         REVEAL_DELAY
       ),
-    });
+    }))
+      .then(res => { if (res && res.reason === "error") toast("기록 저장에 실패했어요. 네트워크를 확인하고 다시 시도해주세요."); })
+      .catch(() => toast("기록 저장에 실패했어요. 네트워크를 확인하고 다시 시도해주세요."));
   }
 }
 
@@ -775,8 +799,11 @@ async function doShare(kind) {
 
 function copyLink(msg = "링크를 복사했어요!") {
   const url = location.href.split("#")[0];
-  navigator.clipboard?.writeText(`${shareText()}\n${url}`).then(() => toast(msg))
-    .catch(() => toast("복사에 실패했어요. 주소창의 링크를 직접 복사해주세요."));
+  // 공용 util.copyToClipboard(clipboard 우선 + iOS execCommand 폴백)을 사용하고
+  // 반환된 성공 여부로만 토스트를 띄운다(거짓 성공 방지).
+  copyToClipboard(`${shareText()}\n${url}`).then(ok => {
+    toast(ok ? msg : "복사에 실패했어요. 주소창의 링크를 직접 복사해주세요.");
+  });
 }
 
 function toast(msg) {
@@ -787,6 +814,31 @@ function toast(msg) {
 }
 
 /* ---------------- 초기화 & 이벤트 ---------------- */
+// 현재 State.region/State.mode를 홈 설정 컨트롤에 반영한다. 대전 모드가 State.region/mode를
+// host 값으로 덮어쓰기 때문에, 대전을 나와 홈으로 돌아오면 지역 버튼/모드 라디오가 실제 State와
+// 어긋난다(→ 표시와 다른 지역으로 랭킹 게임이 조용히 시작되고, 해당 지역 버튼은 identity 가드로
+// 눌리지 않음). goHome에서 State→DOM을 다시 맞춰 이 불일치를 없앤다. State가 이미 UI와 같으면 no-op.
+function syncSetupUI() {
+  document.querySelectorAll(".region-btn").forEach(b =>
+    b.classList.toggle("active", b.dataset.region === State.region));
+  const hasCore = regionSupportsCore(State.region);
+  const coreOption = document.querySelector('.mode-option.core-only');
+  if (coreOption) coreOption.style.display = hasCore ? "" : "none";
+  const modeSelect = document.querySelector('.mode-select');
+  if (modeSelect) modeSelect.classList.toggle("two-cols", !hasCore);
+  if (!hasCore && State.mode === "core") State.mode = "all";   // core 없는 지역인데 core면 안전하게 all로
+  document.querySelectorAll('input[name="mode"]').forEach(r => { r.checked = r.value === State.mode; });
+  // 커스텀 선택을 현재 지역 노선으로 정리한다. 대전으로 지역이 바뀌면 이전 지역의 노선 id가
+  // customLines에 남아, 화면엔 아무 체크 없이 mode=custom인데 size>0이라 시작 버튼이 켜지고,
+  // 시작 시 활성 노선이 없어 빈(0문제) 게임이 즉시 끝나는 문제가 생긴다. 지역 밖 id를 제거해
+  // customLines를 화면과 일치시킨다(지역이 그대로면 모두 유효 → no-op).
+  const validLineIds = new Set(regionLineIds());
+  [...State.customLines].forEach(id => { if (!validLineIds.has(id)) State.customLines.delete(id); });
+  buildCustomPicker();
+  $("#custom-lines").classList.toggle("show", State.mode === "custom");
+  updateStartButton();
+}
+
 function goHome() {
   State.playing = false;
   State.studying = false;
@@ -808,6 +860,7 @@ function goHome() {
   // 홈 배경용 전체 노선도
   State.network = buildNetwork(regionLineIds(), regionMapOptions());
   SubwayMap.render(State.network);
+  syncSetupUI();   // 대전 후 State가 바뀌어 있을 수 있으니 설정 컨트롤을 State에 다시 맞춘다
 }
 
 /* ---------------- 공부 모드 ---------------- */
@@ -826,6 +879,7 @@ function startStudy() {
   SubwayMap.hideFocus();
   // 선명해진 뒤 라벨 표시 + 자유 이동 켜기
   setTimeout(() => {
+    if (!State.studying) return;   // 650ms 내 "나가기" 시 홈 화면에 라벨/드래그가 새는 것 방지
     SubwayMap.showAllLabels();
     SubwayMap.setInteractive(true);
   }, 650);

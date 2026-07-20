@@ -8,11 +8,8 @@
    ============================================================ */
 
 (() => {
-  const $ = sel => document.querySelector(sel);
-
-  function escapeHtml(s) {
-    return String(s || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  }
+  // $ / escapeHtml / lineColor 는 util.js(전역)에서 제공된다.
+  // 게스트/미지정 노선 기본색은 회색(#9aa0a6) — lineColor 호출 시 fallback으로 전달.
 
   let publicRoomTimer = null;
   let publicRoomRequest = 0;
@@ -83,8 +80,19 @@
     return new Promise((resolve) => {
       if (Account.isReady && Account.isReady()) return resolve();
       let done = false;
-      const finish = () => { if (!done) { done = true; resolve(); } };
-      if (Account.onChange) Account.onChange(() => { if (Account.isReady && Account.isReady()) finish(); });
+      let handler = null;
+      // 완료(변경 감지/타임아웃) 시 리스너를 반드시 해제한다. 예전엔 open/create/join마다
+      // onChange 구독을 남겨 리스너 배열이 무한히 커지고 매 account 변경마다 stale 클로저가 재실행됐다.
+      const finish = () => {
+        if (done) return;
+        done = true;
+        if (handler && Account.offChange) Account.offChange(handler);
+        resolve();
+      };
+      if (Account.onChange) {
+        handler = () => { if (Account.isReady && Account.isReady()) finish(); };
+        Account.onChange(handler);
+      }
       setTimeout(finish, timeoutMs);
     });
   }
@@ -100,6 +108,9 @@
   /* ---------- 방 만들기 ---------- */
   async function doCreate() {
     const btn = $("#vs-create-btn");
+    // 단일 실행 가드: Enter 키 핸들러는 disabled 속성을 무시하므로 더블 제출 시
+    // room_create_v2가 두 번 실행돼 고아 방/epoch 경쟁이 생긴다. disabled로 재진입 차단.
+    if (btn?.disabled) return;
     btn.disabled = true; btn.textContent = "방 만드는 중…";
     await ensureAccountReady();   // 닉네임/프로필 로딩 완료 후 진행
     const res = await Versus.createRoom({
@@ -116,6 +127,7 @@
   async function doJoin(codeOverride, fromUrl = false) {
     const code = codeOverride || $("#vs-code-input").value;
     const btn = $("#vs-join-btn");
+    if (btn?.disabled) return;   // 단일 실행 가드(Enter 더블 제출 → 중복 joinRoom 방지)
     if (btn) { btn.disabled = true; btn.textContent = "입장 중…"; }
     await ensureAccountReady();   // 닉네임/프로필 로딩 완료 후 진행
     const res = await Versus.joinRoom(code);
@@ -197,16 +209,12 @@
   }
 
   /* ---------- 대기실 ---------- */
-  // 테마 노선 색. themeLine이 없으면(게스트) 회색.
-  function lineColor(id) {
-    if (!id) return "#9aa0a6";  // 게스트: 회색
-    if (typeof lineById === "function") { const l = lineById(id); if (l) return l.color; }
-    return "#9aa0a6";
-  }
+  // 게스트/미지정 노선 기본색 (util.js lineColor의 fallback 인자로 전달)
+  const GUEST_COLOR = "#9aa0a6";
 
   // 참가자 한 명을 닉네임 태그로
   function playerTag(pl) {
-    const color = lineColor(pl.themeLine);
+    const color = lineColor(pl.themeLine, GUEST_COLOR);
     const isMe = (pl.id === Versus.myId());
     const isThisHost = (pl.id === Versus.getHostId());
     const crown = isThisHost ? `<span class="vs-crown" title="방장">👑</span>` : "";
@@ -404,10 +412,12 @@
     const players = Versus.getPlayers();
     const myId = Versus.myId();
     // 점수 내림차순 정렬
-    const sorted = [...players].sort((a, b) => (scores[b.id] || 0) - (scores[a.id] || 0) || String(a.name).localeCompare(String(b.name)));
+    const sorted = [...players].sort((a, b) => (Number(scores[b.id]) || 0) - (Number(scores[a.id]) || 0) || String(a.name).localeCompare(String(b.name)));
     box.innerHTML = sorted.map(p => {
-      const sc = scores[p.id] || 0;
-      const color = lineColor(p.themeLine);
+      // 점수는 host가 쓰는 game_states.scores JSON에서 온다 → 숫자로 강제 변환해
+      // innerHTML에 문자열(<img onerror=…>)이 주입되는 저장형 XSS를 차단한다.
+      const sc = Number(scores[p.id]) || 0;
+      const color = lineColor(p.themeLine, GUEST_COLOR);
       const isMe = p.id === myId;
       const win = p.id === lastWinner;
       const typing = p.typing;
@@ -428,14 +438,14 @@
     const myId = (data && data.myId) || Versus.myId();
     const medals = ["🥇", "🥈", "🥉"];
     list.innerHTML = ranking.map((r, i) => {
-      const color = lineColor(r.themeLine);
+      const color = lineColor(r.themeLine, GUEST_COLOR);
       const rankIcon = medals[i] || `<span class="vs-rank-num">${i + 1}</span>`;
       const isMe = r.id === myId;
       return `<div class="vs-result-item${isMe ? " me" : ""}${i === 0 ? " first" : ""}">
         <span class="vs-result-rank">${rankIcon}</span>
         <span class="vs-sb-dot" style="background:${color}"></span>
         <span class="vs-result-name">${escapeHtml(r.name)}${isMe ? " (나)" : ""}</span>
-        <span class="vs-result-score">${r.score}점</span>
+        <span class="vs-result-score">${Number(r.score) || 0}점</span>
       </div>`;
     }).join("");
 
@@ -508,19 +518,21 @@
     document.body.classList.remove("vs-room-connected");
     closeChat();
     lastChatMessageId = null;
+    unreadChat = 0;            // 방을 나가면 안읽음 배지 초기화(다음 방에 이월 방지)
+    updateUnread();
     closeVersus();
   }
 
-  async function copyLink() {
+  async function copyLobbyLink() {
     const box = $("#vs-lobby-link");
-    try {
-      await navigator.clipboard.writeText(box.value);
-    } catch (e) {
-      box.select(); document.execCommand("copy");
-    }
+    if (!box) return;
+    // 공용 util.copyToClipboard로 실제 성공 여부를 받아 UI에 정직하게 반영한다.
+    // (예전엔 iOS 인앱에서 복사 실패해도 "복사됨!"을 띄워 초대 링크 공유가 조용히 실패했다.)
+    const ok = await copyToClipboard(box.value);
     const btn = $("#vs-copy-link");
+    if (!btn) return;
     const orig = btn.textContent;
-    btn.textContent = "복사됨!";
+    btn.textContent = ok ? "복사됨!" : "복사 실패";
     setTimeout(() => { btn.textContent = orig; }, 1500);
   }
 
@@ -562,10 +574,21 @@
     if (!box) return;
     const list = Array.isArray(messages) ? messages : [];
     const newest = list.length ? String(list[list.length - 1].id) : null;
+    const prevSeen = lastChatMessageId;
     const panelOpen = $("#vs-chat-panel")?.classList.contains("open");
-    if (lastChatMessageId !== null && newest !== lastChatMessageId && !panelOpen) unreadChat += 1;
+    // 폴링(5초)이 여러 메시지를 한꺼번에 가져오면 실제 새 메시지 수만큼 증가(util.js).
+    if (!panelOpen) unreadChat += countNewMessages(list, lastChatMessageId);
     lastChatMessageId = newest;
     updateUnread();
+    // 스크린리더: 전체 목록을 aria-live로 두면 새 메시지마다 대화 전체를 다시 읽는다.
+    // 대신 최신 새 메시지 1건만 별도 polite 영역에 넣는다(첫 렌더/내 메시지는 제외).
+    if (newest && prevSeen !== null && newest !== prevSeen) {
+      const latest = list[list.length - 1];
+      if (latest && latest.player_id !== Versus.myId()) {
+        const sr = $("#vs-chat-sr");
+        if (sr) sr.textContent = `${latest.player_name || "참가자"}: ${latest.body || ""}`;
+      }
+    }
     if (!list.length) {
       box.innerHTML = `<p class="muted">아직 메시지가 없어요.<br>먼저 인사해보세요!</p>`;
       return;
@@ -597,7 +620,7 @@
     }
   }
 
-  async function sendChat(event) {
+  async function submitChat(event) {
     event?.preventDefault();
     const input = $("#vs-chat-input");
     const button = $("#vs-chat-send");
@@ -672,10 +695,10 @@
     $("#vs-code-input")?.addEventListener("input", e => {
       e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
     });
-    $("#vs-copy-link")?.addEventListener("click", copyLink);
+    $("#vs-copy-link")?.addEventListener("click", copyLobbyLink);
     $("#vs-chat-toggle")?.addEventListener("click", openChat);
     $("#vs-chat-close")?.addEventListener("click", closeChat);
-    $("#vs-chat-form")?.addEventListener("submit", sendChat);
+    $("#vs-chat-form")?.addEventListener("submit", submitChat);
     document.querySelectorAll(".vs-leave-btn").forEach(b => b.addEventListener("click", doLeave));
     $("#vs-entry-back")?.addEventListener("click", closeVersus);
 

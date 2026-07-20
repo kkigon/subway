@@ -55,6 +55,10 @@ require("node:vm").createContext(scoringSandbox);
 require("node:vm").runInContext(`${scoring}\nthis.api = { theoreticalMaxScore, rankingScoreParts, scoreAchievement, rankingPlacementBadge };`, scoringSandbox);
 assert.equal(scoringSandbox.api.theoreticalMaxScore(60, 100, 500), 100);
 assert.equal(scoringSandbox.api.theoreticalMaxScore(300, 22, 500), 22);
+// 시간 제한 분기(역 수 > 시간상 낼 수 있는 최대): 60초 @ 500ms → ceil(60000/500)=120, 역 300개여도 120으로 캡
+assert.equal(scoringSandbox.api.theoreticalMaxScore(60, 300, 500), 120);
+// Math.max(1,...) 바닥: duration 0이면 timeMaximum 0이지만 최소 1을 보장(0 나눗셈 방지)
+assert.equal(scoringSandbox.api.theoreticalMaxScore(0, 22, 500), 1);
 const perfect = scoringSandbox.api.rankingScoreParts(20, 20, 1);
 assert.equal(perfect.adjustedScore, 100);
 const improved = scoringSandbox.api.rankingScoreParts(15, 20, 1).adjustedScore;
@@ -71,7 +75,8 @@ assert.equal(scoringSandbox.api.scoreAchievement(94.9).key, "90");
 assert.equal(scoringSandbox.api.scoreAchievement(95).key, "95");
 
 assert.match(accountUi, /rank-placement--\$\{placement\.key\}/);
-assert.match(accountUi, /class="rank-num">\$\{r\.rank\}위/);
+// r.rank는 XSS 방어 일관성을 위해 Number()로 강제 변환된다(레드팀 R2).
+assert.match(accountUi, /class="rank-num">\$\{Number\(r\.rank\) \|\| 0\}위/);
 assert.match(accountUi, /score-achievement--\$\{achievement\.key\}/);
 assert.match(html, /id="btn-settings"/);
 assert.match(html, /id="settings-sound-toggle"[\s\S]*role="switch"/);

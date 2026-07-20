@@ -87,9 +87,18 @@ const Versus = (() => {
   const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   function makeCode(len = 6) { let s = ""; for (let i = 0; i < len; i++) s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]; return s; }
 
+  let guestNameCache = null;
   function guestName() {
-    let n = localStorage.getItem("guestName");
-    if (!n) { n = "Guest #" + Math.floor(1000 + Math.random() * 9000); localStorage.setItem("guestName", n); }
+    // localStorage는 프라이빗 모드/잠금형 인앱 WebView에서 접근만으로 throw할 수 있다.
+    // 가드 없으면 게스트 대전 진입(openEntry/doCreate/doJoin)이 전부 죽는다 → try/catch + 세션 캐시 폴백.
+    if (guestNameCache) return guestNameCache;
+    let n = null;
+    try { n = localStorage.getItem("guestName"); } catch (e) {}
+    if (!n) {
+      n = "Guest #" + Math.floor(1000 + Math.random() * 9000);
+      try { localStorage.setItem("guestName", n); } catch (e) {}
+    }
+    guestNameCache = n;
     return n;
   }
   function resolveMyName() {

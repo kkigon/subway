@@ -13,9 +13,9 @@
   <meta property="og:title" content="지하철 게임 🚇">
   <meta property="og:description" content="제한 시간 안에 지하철역 이름을 몇 개나 맞출 수 있을까?">
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" integrity="sha384-GIdEBaqGN9mNkDkMkzMHW8EKUqtpPIe/sLj1X7DIrnc9uPtLROJgmuDlh+3rBw0j" crossorigin="anonymous">
   <link rel="stylesheet" href="css/style.css">
-  <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js" crossorigin="anonymous"></script>
+  <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js" integrity="sha384-DKYJZ8NLiK8MN4/C5P2dtSmLQ4KwPaoqAfyA/DfmEc1VDxu4yyC7wy6K1Hs90nka" crossorigin="anonymous"></script>
   <script>Kakao.init("a8047939efe6459542051dbe3e6f11f7");</script>
 </head>
 <body class="at-home">
@@ -226,7 +226,7 @@
           </div>
           <button id="vs-room-refresh" class="vs-room-refresh" type="button" aria-label="공개방 새로고침">↻ 새로고침</button>
         </div>
-        <div id="vs-public-rooms" class="vs-public-rooms" aria-live="polite">
+        <div id="vs-public-rooms" class="vs-public-rooms">
           <p class="muted">공개방을 불러오는 중…</p>
         </div>
       </section>
@@ -330,7 +330,8 @@
       <div><b>방 채팅</b><small id="vs-chat-room-name"></small></div>
       <button id="vs-chat-close" type="button" aria-label="채팅 닫기">✕</button>
     </div>
-    <div id="vs-chat-messages" class="vs-chat-messages" aria-live="polite">
+    <div id="vs-chat-sr" class="sr-only" aria-live="polite"></div>
+    <div id="vs-chat-messages" class="vs-chat-messages">
       <p class="muted">아직 메시지가 없어요.</p>
     </div>
     <form id="vs-chat-form" class="vs-chat-form">
@@ -362,7 +363,7 @@
   <!-- ============ 모달들 ============ -->
 
   <!-- 첫 로그인: 프로필 설정 -->
-  <div id="profile-modal" class="modal-backdrop">
+  <div id="profile-modal" class="modal-backdrop" role="dialog" aria-modal="true">
     <div class="modal-card">
       <h2 class="modal-title">프로필을 만들어요</h2>
       <label class="field-label" for="profile-nick">닉네임 (1~12자)</label>
@@ -378,7 +379,7 @@
   </div>
 
   <!-- 랭킹 -->
-  <div id="ranking-modal" class="modal-backdrop">
+  <div id="ranking-modal" class="modal-backdrop" role="dialog" aria-modal="true">
     <div class="modal-card">
       <button class="modal-x" type="button" data-close-modal="ranking-modal" aria-label="닫기">✕</button>
       <h2 class="modal-title">🏆 역대 랭킹</h2>
@@ -433,7 +434,7 @@
   </div>
 
   <!-- 마이페이지 -->
-  <div id="mypage-modal" class="modal-backdrop">
+  <div id="mypage-modal" class="modal-backdrop" role="dialog" aria-modal="true">
     <div class="modal-card">
       <button class="modal-x" type="button" data-close-modal="mypage-modal" aria-label="닫기">✕</button>
       <h2 class="modal-title">마이페이지</h2>
@@ -465,7 +466,7 @@
   </div>
 
   <!-- 인앱 브라우저 안내 모달 (iOS 등 강제 탈출이 안 되는 경우) -->
-  <div id="inapp-modal" class="modal-backdrop">
+  <div id="inapp-modal" class="modal-backdrop" role="dialog" aria-modal="true">
     <div class="modal-card">
       <button class="modal-x" type="button" data-close-modal="inapp-modal" aria-label="닫기">✕</button>
       <h2 class="modal-title">🌐 외부 브라우저로 열어주세요</h2>
@@ -487,6 +488,7 @@
 
   <div id="toast" class="toast" role="status"></div>
 
+  <script src="js/util.js"></script>
   <script src="js/data.js"></script>
   <script src="js/data-busan.js"></script>
   <script src="js/data-nationwide.js"></script>
@@ -498,7 +500,7 @@
   <script src="js/game.js"></script>
 
   <!-- 백엔드(로그인/랭킹) — Supabase -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.7" integrity="sha384-BmlQlKlDvXvKoxkn5OQuUo/aJQCTXeB+Kls6EccBmG4Kf8AXvp89RtO9MtPxP/r5" crossorigin="anonymous"></script>
   <script src="js/supabase-config.js"></script>
   <script src="js/backend.js"></script>
   <script src="js/inapp-browser.js"></script>

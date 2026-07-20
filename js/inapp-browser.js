@@ -14,7 +14,7 @@ const InAppBrowser = (() => {
   const matchers = [
     { key: "kakaotalk", label: "카카오톡", test: /kakaotalk/ },
     { key: "naver",     label: "네이버 앱", test: /naver\(inapp|inapp.*naver|naver/ },
-    { key: "line",      label: "라인",     test: /\bline\//ig },
+    { key: "line",      label: "라인",     test: /\bline\// },
     { key: "instagram", label: "인스타그램", test: /instagram/ },
     { key: "facebook",  label: "페이스북",   test: /fban|fbav|fb_iab/ },
     { key: "band",      label: "밴드",     test: /\bband\b/ },
@@ -38,7 +38,10 @@ const InAppBrowser = (() => {
   // 외부 브라우저로 현재(또는 지정) URL을 다시 연다.
   // 반환값 true = 탈출 시도함(주로 카카오톡), false = 직접 탈출 불가(안내 필요)
   function tryEscape(targetUrl) {
-    const url = targetUrl || location.href;
+    // fragment(#...)를 제거한다. intent:// URL을 만들 때 fragment가 남으면 공격자가
+    // 같은 오리진 링크에 #Intent;package=...;end를 실어 Intent.parseUri가 첫 #Intent
+    // 블록(공격자 것)에 바인딩되게 만들어 임의 앱을 강제 실행할 수 있다(Intent 인젝션).
+    const url = (targetUrl || location.href).split("#")[0];
 
     // 카카오톡: 전용 스킴으로 외부 브라우저(기본 브라우저) 강제 오픈
     if (isKakao()) {

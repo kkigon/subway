@@ -6,10 +6,9 @@
    ============================================================ */
 
 (() => {
-  const $ = sel => document.querySelector(sel);
+  // $ / escapeHtml / lineColor 는 util.js(전역)에서 제공된다.
 
   // 테마 노선 옵션 (data.js의 LINES 사용)
-  function lineColor(id) { const l = lineById(id); return l ? l.color : "#0052A4"; }
   function lineName(id) { const l = lineById(id); return l ? l.name : id; }
   function lineDarkText(id) { const l = lineById(id); return l && l.darkText; }
 
@@ -94,10 +93,6 @@
     return `<span class="nick-tag static" style="--theme:${color}">
       <span class="nick-dot"></span><span class="nick-text">${escapeHtml(nickname)}</span>
     </span>`;
-  }
-
-  function escapeHtml(s) {
-    return (s || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
   /* ---------- 테마 노선 선택 그리드 ---------- */
@@ -202,7 +197,7 @@
     }
     $("#mypage-best").innerHTML = bestOrder
       .filter(k => best[k] !== undefined)
-      .map(k => `<div class="best-card"><span class="best-mode">${bestLabel[k] || k}</span><span class="best-score">${best[k]}</span><span class="best-unit">역</span></div>`)
+      .map(k => `<div class="best-card"><span class="best-mode">${bestLabel[k] || k}</span><span class="best-score">${Number(best[k]) || 0}</span><span class="best-unit">역</span></div>`)
       .join("") || `<p class="muted">아직 기록이 없어요. 시간 도전 모드를 플레이해보세요!</p>`;
 
     // 플레이 기록 목록
@@ -215,7 +210,7 @@
         const d = new Date(pl.created_at);
         const date = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
         return `<div class="play-row">
-          <span class="play-score">${pl.score}역</span>
+          <span class="play-score">${Number(pl.score) || 0}역</span>
           <span class="play-mode">${pl.play_variant === "reverse" ? "🙃 거꾸로 · " : ""}${escapeHtml(pl.mode_label)}</span>
           <span class="play-date">${date}</span>
         </div>`;
@@ -313,41 +308,61 @@
       const achievement = scoreAchievement(r.adjusted_score);
       const placementHTML = placement
         ? `<span class="rank-placement rank-placement--${placement.key}" title="${placement.label}"><span aria-hidden="true">${placement.icon}</span><small>${placement.label}</small></span>`
-        : `<span class="rank-num">${r.rank}위</span>`;
+        : `<span class="rank-num">${Number(r.rank) || 0}위</span>`;
       const mine = myId && r.user_id === myId ? " mine" : "";
       const exceptional = achievement.key === "95" ? " score-exceptional" : "";
       return `<div class="rank-row${mine}${exceptional}">
         ${placementHTML}
         <span class="rank-nick">${nickTagHTML(r.nickname, r.theme_line)}</span>
         <span class="rank-score">
-          <strong class="score-achievement score-achievement--${achievement.key}"><span aria-hidden="true">${achievement.icon}</span>${Number(r.adjusted_score).toFixed(1)}점</strong>
+          <strong class="score-achievement score-achievement--${achievement.key}"><span aria-hidden="true">${achievement.icon}</span>${(Number(r.adjusted_score) || 0).toFixed(1)}점</strong>
           <span class="score-tier-label">${achievement.label}</span>
-          <small>${r.best_score}역 · 기록 ${Number(r.record_points).toFixed(1)} + 백분위 ${Number(r.percentile_bonus).toFixed(1)}</small>
+          <small>${Number(r.best_score) || 0}역 · 기록 ${(Number(r.record_points) || 0).toFixed(1)} + 백분위 ${(Number(r.percentile_bonus) || 0).toFixed(1)}</small>
         </span>
       </div>`;
     }).join("");
   }
 
   /* ---------- 모달 공통 ---------- */
-  function openModal(sel) { $(sel).classList.add("show"); document.body.classList.add("modal-open"); }
-  function closeModal(sel) { $(sel).classList.remove("show"); if (!document.querySelector(".modal-backdrop.show")) document.body.classList.remove("modal-open"); }
+  // 접근성: 열 때 모달 안 첫 요소로 포커스 이동, 닫을 때 열었던 요소로 복원(settings.js 패턴).
+  let modalOpener = null;
+  function openModal(sel) {
+    modalOpener = document.activeElement;
+    const m = $(sel);
+    m.classList.add("show");
+    document.body.classList.add("modal-open");
+    const focusTarget = m.querySelector("input, button, select, textarea, [tabindex]");
+    if (focusTarget) focusTarget.focus();
+  }
+  function closeModal(sel) {
+    $(sel).classList.remove("show");
+    if (!document.querySelector(".modal-backdrop.show")) document.body.classList.remove("modal-open");
+    // 포커스 복원: opener가 재렌더(renderAccountButton)로 DOM에서 떨어져 나갔으면
+    // detached 노드에 focus()는 조용히 무시된다 → 연결 여부 확인 후 없으면 계정 영역으로 폴백.
+    if (modalOpener && document.contains(modalOpener) && typeof modalOpener.focus === "function") {
+      modalOpener.focus();
+    } else {
+      $("#account-area")?.querySelector("button")?.focus();
+    }
+    modalOpener = null;
+  }
 
   /* ---------- game.js가 호출하는 훅 ---------- */
   // 시간제한/거꾸로 모드 한 판이 끝나면 game.js가 이걸 부른다.
+  // 반환값: { saved: boolean, reason: "not-timed" | "not-logged-in" | "ok" | "error" }
+  // game.js가 reason === "error"일 때만 사용자에게 실패를 알린다.
   window.onPlayFinished = async ({ score, region, mode, modeLabel, playMode, duration, theoreticalMax }) => {
-    if (playMode !== "timed" && playMode !== "reverse") return; // 연속/알 수 없는 모드는 저장 안 함
-    if (!Account.isLoggedIn() || !Account.hasProfile()) return; // 비로그인은 저장 안 함
+    if (playMode !== "timed" && playMode !== "reverse") return { saved: false, reason: "not-timed" }; // 연속/알 수 없는 모드는 저장 안 함
+    if (!Account.isLoggedIn() || !Account.hasProfile()) return { saved: false, reason: "not-logged-in" }; // 비로그인은 저장 안 함
     // 랭킹/기록 구분을 위해 region을 함께 저장. rankMode = "지역:모드"
     const rankMode = `${region || "seoul"}:${mode}`;
     const reverse = playMode === "reverse";
-    const saved = await Account.savePlay({
+    const ok = await Account.savePlay({
       score, region: region || "seoul", mode, rankMode,
       modeLabel: `${modeLabel} · ${duration}초`, duration, theoreticalMax,
       playVariant: reverse ? "reverse" : "normal",
     });
-    if (reverse && !saved && typeof toast === "function") {
-      toast("거꾸로 기록 저장에 실패했어요. DB 마이그레이션 적용 여부를 확인해주세요.");
-    }
+    return { saved: ok, reason: ok ? "ok" : "error" };
   };
 
   /* ---------- 초기화 ---------- */
@@ -367,21 +382,29 @@
     // 모달 닫기 버튼 / 배경 클릭
     document.querySelectorAll("[data-close-modal]").forEach(btn =>
       btn.addEventListener("click", () => closeModal("#" + btn.dataset.closeModal)));
+    // 배경 클릭으로 닫기 — 단, 프로필 설정은 필수 관문이라 배경 클릭으로 닫으면 안 된다
+    // (로그인됐지만 프로필 없는 limbo 방지). 로그아웃/완료만 탈출 경로.
     document.querySelectorAll(".modal-backdrop").forEach(bd =>
-      bd.addEventListener("click", e => { if (e.target === bd) closeModal("#" + bd.id); }));
+      bd.addEventListener("click", e => { if (e.target === bd && bd.id !== "profile-modal") closeModal("#" + bd.id); }));
+    // Esc로 닫기 — profile-modal(필수 관문)과 settings-modal(settings.js가 자체 처리)은 제외
+    document.addEventListener("keydown", e => {
+      if (e.key !== "Escape") return;
+      const open = [...document.querySelectorAll(".modal-backdrop.show")]
+        .filter(m => m.id !== "profile-modal" && m.id !== "settings-modal");
+      if (open.length) closeModal("#" + open[open.length - 1].id);
+    });
 
     // 인앱 안내 모달: 주소 복사 버튼
     $("#inapp-copy")?.addEventListener("click", async () => {
       const urlBox = $("#inapp-url");
-      try {
-        await navigator.clipboard.writeText(urlBox.value);
-        $("#inapp-copy").textContent = "복사됨!";
-        setTimeout(() => { $("#inapp-copy").textContent = "주소 복사"; }, 1500);
-      } catch (e) {
-        urlBox.select(); document.execCommand("copy");
-        $("#inapp-copy").textContent = "복사됨!";
-        setTimeout(() => { $("#inapp-copy").textContent = "주소 복사"; }, 1500);
+      if (!urlBox) return;
+      const ok = await copyToClipboard(urlBox.value);   // 공용 util, 성공 여부 정직 반영
+      const btn = $("#inapp-copy");
+      if (btn) {
+        btn.textContent = ok ? "복사됨!" : "복사 실패";
+        setTimeout(() => { btn.textContent = "주소 복사"; }, 1500);
       }
+      if (!ok) { try { urlBox.select(); } catch (_) {} }   // 실패 시 수동 복사용으로 선택만
     });
     // 인앱 안내 모달: 외부 브라우저로 열기 다시 시도
     $("#inapp-open")?.addEventListener("click", () => {
