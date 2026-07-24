@@ -48,6 +48,8 @@ for (const [id, count] of Object.entries(expectedStationCounts)) {
 // 대구 노선도는 공식 도식처럼 긴 수평축과 도심 환승 구간을 유지해야 한다.
 const daeguNetwork = buildNetwork(expectedLines.daegu);
 const daeguStation = name => daeguNetwork.stations.get(`DG:${name}`);
+assert.ok(daeguStation("수성알파시티"), "대구 2호선은 현행 역명인 수성알파시티를 사용해야 한다");
+assert.equal(daeguStation("대공원"), undefined, "변경 전 역명인 대공원은 남아 있지 않아야 한다");
 assert.equal(daeguStation("문양").y, daeguStation("영남대").y, "대구 2호선 동서축은 수평이어야 한다");
 assert.equal(daeguStation("설화명곡").y, daeguStation("영대병원").y, "대구 1호선 서쪽 구간은 수평이어야 한다");
 assert.equal(daeguStation("동구청").y, daeguStation("하양(대구가톨릭대)").y, "대구 1호선 동쪽 구간은 수평이어야 한다");
@@ -67,6 +69,7 @@ const daeguAspect = ((daeguNetwork.bounds.maxX - daeguNetwork.bounds.minX) + 160
 assert.ok(daeguAspect < 1.8, "대구 노선도는 일반 데스크톱 화면에서 좌우가 잘리지 않는 비율이어야 한다");
 
 assert.equal(DISPLAY_NAME["DG:하양(대구가톨릭대)"], "하양(대구가톨릭대)");
+assert.equal(DISPLAY_NAME["DG:수성알파시티"], "수성알파시티");
 assert.equal(DISPLAY_NAME["GJ:학동·증심사입구"], "학동·증심사입구");
 assert.equal(DISPLAY_NAME["GJ:문화전당(구도청)"], "문화전당(구도청)");
 
